@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/home/niu/Desktop/data_collection/include -isystem /usr/include/opencv4
+CXX_INCLUDES = -I/home/niu/Desktop/data_collection/include -I/opt/MVS/include -isystem /usr/include/opencv4
 
 CXX_FLAGS = -std=gnu++17
 

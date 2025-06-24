@@ -1,4 +1,5 @@
 #include "solver.hpp"
+#include "hik_camera.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <iostream>

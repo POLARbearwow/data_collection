@@ -97,10 +97,24 @@ CMakeFiles/trajectory_solver.dir/src/solver.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/trajectory_solver.dir/src/solver.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/niu/Desktop/data_collection/src/solver.cpp -o CMakeFiles/trajectory_solver.dir/src/solver.cpp.s
 
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: CMakeFiles/trajectory_solver.dir/flags.make
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: ../src/solver_camera.cpp
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: CMakeFiles/trajectory_solver.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o -MF CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o.d -o CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o -c /home/niu/Desktop/data_collection/src/solver_camera.cpp
+
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/niu/Desktop/data_collection/src/solver_camera.cpp > CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.i
+
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/niu/Desktop/data_collection/src/solver_camera.cpp -o CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.s
+
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: CMakeFiles/trajectory_solver.dir/flags.make
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: ../src/utils.cpp
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: CMakeFiles/trajectory_solver.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/trajectory_solver.dir/src/utils.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/trajectory_solver.dir/src/utils.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/trajectory_solver.dir/src/utils.cpp.o -MF CMakeFiles/trajectory_solver.dir/src/utils.cpp.o.d -o CMakeFiles/trajectory_solver.dir/src/utils.cpp.o -c /home/niu/Desktop/data_collection/src/utils.cpp
 
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.i: cmake_force
@@ -111,21 +125,40 @@ CMakeFiles/trajectory_solver.dir/src/utils.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/trajectory_solver.dir/src/utils.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/niu/Desktop/data_collection/src/utils.cpp -o CMakeFiles/trajectory_solver.dir/src/utils.cpp.s
 
+CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o: CMakeFiles/trajectory_solver.dir/flags.make
+CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o: ../src/hik_camera.cpp
+CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o: CMakeFiles/trajectory_solver.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o -MF CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o.d -o CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o -c /home/niu/Desktop/data_collection/src/hik_camera.cpp
+
+CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/niu/Desktop/data_collection/src/hik_camera.cpp > CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.i
+
+CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/niu/Desktop/data_collection/src/hik_camera.cpp -o CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.s
+
 # Object files for target trajectory_solver
 trajectory_solver_OBJECTS = \
 "CMakeFiles/trajectory_solver.dir/src/main.cpp.o" \
 "CMakeFiles/trajectory_solver.dir/src/solver.cpp.o" \
-"CMakeFiles/trajectory_solver.dir/src/utils.cpp.o"
+"CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o" \
+"CMakeFiles/trajectory_solver.dir/src/utils.cpp.o" \
+"CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o"
 
 # External object files for target trajectory_solver
 trajectory_solver_EXTERNAL_OBJECTS =
 
 trajectory_solver: CMakeFiles/trajectory_solver.dir/src/main.cpp.o
 trajectory_solver: CMakeFiles/trajectory_solver.dir/src/solver.cpp.o
+trajectory_solver: CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o
 trajectory_solver: CMakeFiles/trajectory_solver.dir/src/utils.cpp.o
+trajectory_solver: CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o
 trajectory_solver: CMakeFiles/trajectory_solver.dir/build.make
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_highgui.so.4.5.4d
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_aruco.so.4.5.4d
+trajectory_solver: /opt/MVS/lib/64/libMvCameraControl.so
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_videoio.so.4.5.4d
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_imgcodecs.so.4.5.4d
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_calib3d.so.4.5.4d
@@ -134,7 +167,7 @@ trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.4.5.4d
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_flann.so.4.5.4d
 trajectory_solver: /usr/lib/x86_64-linux-gnu/libopencv_core.so.4.5.4d
 trajectory_solver: CMakeFiles/trajectory_solver.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking CXX executable trajectory_solver"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Linking CXX executable trajectory_solver"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/trajectory_solver.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

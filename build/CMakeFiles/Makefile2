@@ -83,12 +83,12 @@ clean: CMakeFiles/basketball_detect.dir/clean
 CMakeFiles/trajectory_solver.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=4,5,6,7 "Built target trajectory_solver"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/niu/Desktop/data_collection/build/CMakeFiles --progress-num=4,5,6,7,8,9 "Built target trajectory_solver"
 .PHONY : CMakeFiles/trajectory_solver.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/trajectory_solver.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/niu/Desktop/data_collection/build/CMakeFiles 4
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/niu/Desktop/data_collection/build/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/trajectory_solver.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/niu/Desktop/data_collection/build/CMakeFiles 0
 .PHONY : CMakeFiles/trajectory_solver.dir/rule

@@ -166,6 +166,30 @@ src/basketball_detect.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/basketball_detect.dir/build.make CMakeFiles/basketball_detect.dir/src/basketball_detect.cpp.s
 .PHONY : src/basketball_detect.cpp.s
 
+src/hik_camera.o: src/hik_camera.cpp.o
+.PHONY : src/hik_camera.o
+
+# target to build an object file
+src/hik_camera.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.o
+.PHONY : src/hik_camera.cpp.o
+
+src/hik_camera.i: src/hik_camera.cpp.i
+.PHONY : src/hik_camera.i
+
+# target to preprocess a source file
+src/hik_camera.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.i
+.PHONY : src/hik_camera.cpp.i
+
+src/hik_camera.s: src/hik_camera.cpp.s
+.PHONY : src/hik_camera.s
+
+# target to generate assembly for a file
+src/hik_camera.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/hik_camera.cpp.s
+.PHONY : src/hik_camera.cpp.s
+
 src/main.o: src/main.cpp.o
 .PHONY : src/main.o
 
@@ -214,6 +238,30 @@ src/solver.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/solver.cpp.s
 .PHONY : src/solver.cpp.s
 
+src/solver_camera.o: src/solver_camera.cpp.o
+.PHONY : src/solver_camera.o
+
+# target to build an object file
+src/solver_camera.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o
+.PHONY : src/solver_camera.cpp.o
+
+src/solver_camera.i: src/solver_camera.cpp.i
+.PHONY : src/solver_camera.i
+
+# target to preprocess a source file
+src/solver_camera.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.i
+.PHONY : src/solver_camera.cpp.i
+
+src/solver_camera.s: src/solver_camera.cpp.s
+.PHONY : src/solver_camera.s
+
+# target to generate assembly for a file
+src/solver_camera.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/trajectory_solver.dir/build.make CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.s
+.PHONY : src/solver_camera.cpp.s
+
 src/utils.o: src/utils.cpp.o
 .PHONY : src/utils.o
 
@@ -254,12 +302,18 @@ help:
 	@echo "... src/basketball_detect.o"
 	@echo "... src/basketball_detect.i"
 	@echo "... src/basketball_detect.s"
+	@echo "... src/hik_camera.o"
+	@echo "... src/hik_camera.i"
+	@echo "... src/hik_camera.s"
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"
 	@echo "... src/solver.o"
 	@echo "... src/solver.i"
 	@echo "... src/solver.s"
+	@echo "... src/solver_camera.o"
+	@echo "... src/solver_camera.i"
+	@echo "... src/solver_camera.s"
 	@echo "... src/utils.o"
 	@echo "... src/utils.i"
 	@echo "... src/utils.s"

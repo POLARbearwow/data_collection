@@ -1,5 +1,5 @@
-CMakeFiles/trajectory_solver.dir/src/solver.cpp.o: \
- /home/niu/Desktop/data_collection/src/solver.cpp \
+CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: \
+ /home/niu/Desktop/data_collection/src/solver_camera.cpp \
  /usr/include/stdc-predef.h \
  /home/niu/Desktop/data_collection/include/solver.hpp \
  /usr/include/c++/11/string \
