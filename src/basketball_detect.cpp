@@ -5,6 +5,8 @@
 #include "common.hpp"
 #include "utils.hpp"
 #include "detect.hpp"
+#include <unistd.h>
+#include <filesystem>
 
 using namespace cv;
 using namespace std;
@@ -63,13 +65,45 @@ void runBasketballDetect(const std::string &videoPath, const Config &cfg)
 
 int main(int argc, char **argv)
 {
-    if(argc < 3)
+    if(argc < 2)
     {
-        cerr << "用法: " << argv[0] << " <video_path> <config.yaml>" << endl;
+        cerr << "用法: " << argv[0] << " <video_path> [config.yaml]" << endl;
         return -1;
     }
     string videoPath = argv[1];
-    string configPath = argv[2];
+    string configPath;
+    if(argc >= 3) {
+        configPath = argv[2];
+    } else {
+        // 获取当前可执行文件所在目录
+        char result[PATH_MAX];
+        ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+        string execPath = string(result, (count > 0) ? count : 0);
+        string execDir = execPath.substr(0, execPath.find_last_of("/"));
+        
+        // 尝试不同的相对路径
+        vector<string> candidates = {
+            execDir + "/../config/example_config.yaml",  // build目录执行
+            execDir + "/config/example_config.yaml",     // 安装目录执行
+            "../config/example_config.yaml",             // 相对于build目录
+            "config/example_config.yaml",                // 相对于源码根目录
+            "./example_config.yaml"                      // 当前目录
+        };
+        
+        for(const auto& path : candidates) {
+            if(filesystem::exists(path)) {
+                configPath = path;
+                break;
+            }
+        }
+        
+        if(configPath.empty()) {
+            cerr << "错误：无法找到配置文件。请确保config/example_config.yaml存在" << endl;
+            return -1;
+        }
+    }
+
+    cout << "加载配置文件: " << configPath << endl;
 
     Config cfg;
     if(!loadConfig(configPath, cfg)) return -1;

@@ -20,8 +20,8 @@ struct Config {
     double H_marker = 0.0;            // ArUco 中心点离地高度 (m)
 
     // HSV 阈值
-    cv::Scalar hsvLow{20, 100, 100};
-    cv::Scalar hsvHigh{40, 255, 255};
+    cv::Scalar hsvLow{0, 167, 37};
+    cv::Scalar hsvHigh{19, 240, 147};
 
     // 运动平面定义
     Plane motionPlane;

@@ -417,7 +417,21 @@ CMakeFiles/basketball_detect.dir/src/basketball_detect.cpp.o: ../src/basketball_
   /usr/include/opencv4/opencv2/aruco.hpp \
   /usr/include/opencv4/opencv2/aruco/dictionary.hpp \
   ../include/utils.hpp \
-  ../include/detect.hpp
+  ../include/detect.hpp \
+  /usr/include/unistd.h \
+  /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
+  /usr/include/x86_64-linux-gnu/bits/environments.h \
+  /usr/include/x86_64-linux-gnu/bits/confname.h \
+  /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
+  /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
+  /usr/include/x86_64-linux-gnu/bits/unistd_ext.h \
+  /usr/include/linux/close_range.h \
+  /usr/include/c++/11/filesystem \
+  /usr/include/c++/11/bits/fs_fwd.h \
+  /usr/include/c++/11/bits/fs_path.h \
+  /usr/include/c++/11/codecvt \
+  /usr/include/c++/11/bits/fs_dir.h \
+  /usr/include/c++/11/bits/fs_ops.h
 
 CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
   /usr/include/stdc-predef.h \
@@ -838,6 +852,22 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 ../src/utils.cpp:
 
+/usr/include/c++/11/bits/fs_ops.h:
+
+/usr/include/c++/11/bits/fs_dir.h:
+
+/usr/include/c++/11/filesystem:
+
+/usr/include/linux/close_range.h:
+
+/usr/include/x86_64-linux-gnu/bits/unistd_ext.h:
+
+/usr/include/x86_64-linux-gnu/bits/getopt_core.h:
+
+/usr/include/x86_64-linux-gnu/bits/confname.h:
+
+/usr/include/x86_64-linux-gnu/bits/posix_opt.h:
+
 ../include/detect.hpp:
 
 /usr/include/opencv4/opencv2/aruco.hpp:
@@ -1066,6 +1096,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 /usr/include/x86_64-linux-gnu/bits/posix2_lim.h:
 
+/usr/include/unistd.h:
+
 /usr/include/c++/11/bits/stl_algobase.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/11/include/stdint.h:
@@ -1230,6 +1262,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 /usr/include/sched.h:
 
+/usr/include/c++/11/bits/fs_path.h:
+
 /usr/include/opencv4/opencv2/flann/sampling.h:
 
 /usr/include/x86_64-linux-gnu/bits/stdlib-float.h:
@@ -1275,6 +1309,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 /usr/include/x86_64-linux-gnu/bits/timesize.h:
 
 /usr/include/c++/11/limits:
+
+/usr/include/x86_64-linux-gnu/bits/environments.h:
 
 /usr/include/c++/11/bits/exception_defines.h:
 
@@ -1482,6 +1518,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h:
 
+/usr/include/c++/11/codecvt:
+
 /usr/include/opencv4/opencv2/dnn/dict.hpp:
 
 /usr/include/c++/11/bits/streambuf.tcc:
@@ -1538,6 +1576,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 /usr/include/x86_64-linux-gnu/bits/cpu-set.h:
 
+/usr/include/x86_64-linux-gnu/bits/getopt_posix.h:
+
 /usr/include/opencv4/opencv2/core/cuda.hpp:
 
 /usr/include/time.h:
@@ -1545,6 +1585,8 @@ CMakeFiles/basketball_detect.dir/src/utils.cpp.o: ../src/utils.cpp \
 /usr/include/x86_64-linux-gnu/bits/setjmp.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
+
+/usr/include/c++/11/bits/fs_fwd.h:
 
 /usr/include/c++/11/bits/stl_bvector.h:
 

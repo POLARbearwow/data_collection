@@ -350,4 +350,14 @@ CMakeFiles/basketball_detect.dir/src/basketball_detect.cpp.o: \
  /usr/include/opencv4/opencv2/aruco.hpp \
  /usr/include/opencv4/opencv2/aruco/dictionary.hpp \
  /home/niu/Desktop/data_collection/include/utils.hpp \
- /home/niu/Desktop/data_collection/include/detect.hpp
+ /home/niu/Desktop/data_collection/include/detect.hpp \
+ /usr/include/unistd.h /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
+ /usr/include/x86_64-linux-gnu/bits/environments.h \
+ /usr/include/x86_64-linux-gnu/bits/confname.h \
+ /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
+ /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
+ /usr/include/x86_64-linux-gnu/bits/unistd_ext.h \
+ /usr/include/linux/close_range.h /usr/include/c++/11/filesystem \
+ /usr/include/c++/11/bits/fs_fwd.h /usr/include/c++/11/bits/fs_path.h \
+ /usr/include/c++/11/codecvt /usr/include/c++/11/bits/fs_dir.h \
+ /usr/include/c++/11/bits/fs_ops.h

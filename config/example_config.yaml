@@ -37,13 +37,14 @@ hsv_high: !!opencv-matrix
   data: [ 19, 240, 147 ]
 
 # 运动平面
-motion_plane_point: !!opencv-matrix
-  rows: 1
-  cols: 3
-  dt: d
-  data: [ 10.0, 10.0, -0.5 ]
-motion_plane_normal: !!opencv-matrix
-  rows: 1
-  cols: 3
-  dt: d
-  data: [ 0.0, 0.0, 1.0 ]
+motion_plane:
+  point: !!opencv-matrix
+    rows: 1
+    cols: 3
+    dt: d
+    data: [ 10.0, 10.0, 0.5 ]
+  normal: !!opencv-matrix
+    rows: 1
+    cols: 3
+    dt: d
+    data: [ 0.0, 0.0, 1.0 ]
