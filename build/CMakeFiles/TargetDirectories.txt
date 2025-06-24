@@ -1,0 +1,4 @@
+/home/niu/Desktop/data_collection/build/CMakeFiles/trajectory_solver.dir
+/home/niu/Desktop/data_collection/build/CMakeFiles/basketball_detect.dir
+/home/niu/Desktop/data_collection/build/CMakeFiles/edit_cache.dir
+/home/niu/Desktop/data_collection/build/CMakeFiles/rebuild_cache.dir
