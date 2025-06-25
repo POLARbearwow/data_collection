@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 查找 OpenCV
-find_package(OpenCV REQUIRED core calib3d imgproc highgui aruco)
+find_package(OpenCV REQUIRED core calib3d imgproc highgui video aruco)
 
 # 如果未找到 OpenCV，则给出提示
 if(NOT OpenCV_FOUND)

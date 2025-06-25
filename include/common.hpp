@@ -27,6 +27,9 @@ struct Config {
     // 记录文件保存目录（可选，默认当前目录）
     std::string recordDir{"."};
 
+    // 轨迹绘制：若连续两帧篮球中心距离超过该值，将拆分轨迹 (像素)
+    double maxBallGap = 120.0;
+
     // HSV 阈值
     cv::Scalar hsvLow{0, 167, 37};
     cv::Scalar hsvHigh{19, 240, 147};

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <ctime>
 #include <filesystem>
+#include <opencv2/video.hpp>
 
 using namespace cv;
 using namespace std;
@@ -59,6 +60,9 @@ void runTrajectorySolverCamera(const Config &cfg)
         return;
     }
 
+    // 背景减除器，用于滤除静态背景，只保留运动目标
+    cv::Ptr<cv::BackgroundSubtractor> bgSub = cv::createBackgroundSubtractorMOG2(500, /*varThreshold*/16, /*detectShadows*/true);
+
     cv::Mat frame, undistorted;
     int frameIdx = 0;
     
@@ -77,8 +81,12 @@ void runTrajectorySolverCamera(const Config &cfg)
     const string windowName = "Basketball Detection";
     cv::namedWindow(windowName);
     // 添加新的窗口用于显示处理过程
-    const string binaryWindowName = "Binary Process";
-    cv::namedWindow(binaryWindowName);
+    // const string binaryWindowName = "Binary Process"; // 已禁用
+    // cv::namedWindow(binaryWindowName);
+
+    // 新增：运动掩码窗口
+    const string motionWindowName = "Motion Mask";
+    cv::namedWindow(motionWindowName);
 
     // 存储轨迹点和对应的颜色索引
     struct TrajectorySegment {
@@ -118,6 +126,13 @@ void runTrajectorySolverCamera(const Config &cfg)
         }
 
         cv::undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
+
+        // ===== 背景减除，获取前景运动区域 =====
+        cv::Mat fgMask;
+        bgSub->apply(undistorted, fgMask);
+        // 对前景掩码进行简单形态学处理，去除噪声
+        cv::erode(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 1);
+        cv::dilate(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 2);
 
         // 显示检测状态
         string statusText = detectEnabled ? "Detection: ON [Space to toggle]" : "Detection: OFF [Space to toggle]";
@@ -198,6 +213,12 @@ void runTrajectorySolverCamera(const Config &cfg)
         maskViz.copyTo(processViz(cv::Rect(0, 0, mask.cols, mask.rows)));
         morphedViz.copyTo(processViz(cv::Rect(mask.cols, 0, mask.cols, mask.rows)));
 
+        // ===== 颜色掩码与运动前景掩码合并 =====
+        cv::Mat movingMask;
+        cv::bitwise_and(morphed, fgMask, movingMask);
+        // 显示运动掩码
+        cv::imshow(motionWindowName, movingMask);
+
         // 添加标题
         cv::putText(processViz, "Original Mask", 
                    cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 
@@ -206,12 +227,9 @@ void runTrajectorySolverCamera(const Config &cfg)
                    cv::Point(mask.cols + 10, 30), cv::FONT_HERSHEY_SIMPLEX, 
                    0.8, cv::Scalar(0,255,0), 2);
 
-        // 显示处理过程
-        cv::imshow(binaryWindowName, processViz);
-
         // 轮廓检测（始终进行）
         std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(morphed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        cv::findContours(movingMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
         double maxArea = 0; 
         int maxIdx = -1;
         
@@ -250,27 +268,35 @@ void runTrajectorySolverCamera(const Config &cfg)
             cv::Moments m = cv::moments(contours[maxIdx]);
             center2D = cv::Point2f(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
             
-            // 添加新的轨迹点到当前段
+            // 添加新的轨迹点到当前段（带距离检测）
             auto& currentSegment = trajectorySegments.back();
-            currentSegment.points.push_back(center2D);
-            if (currentSegment.points.size() > maxTrajectoryPoints) {
-                currentSegment.points.pop_front();
+            bool startNewSegment = false;
+            if (!currentSegment.points.empty()) {
+                double distGap = cv::norm(center2D - currentSegment.points.back());
+                if (distGap > cfg.maxBallGap) {
+                    startNewSegment = true;
+                }
             }
 
-            // 绘制所有轨迹段
-            for (const auto& segment : trajectorySegments) {
-                const cv::Scalar& color = TRAJECTORY_COLORS[segment.colorIndex];
-                for (size_t i = 1; i < segment.points.size(); ++i) {
-                    cv::line(undistorted, 
-                            segment.points[i-1], 
-                            segment.points[i], 
-                            color, 
-                            2);
+            if (startNewSegment) {
+                // 仅切分轨迹，不改变颜色
+                trajectorySegments.push_back({std::deque<cv::Point2f>(), currentSegment.colorIndex});
+                if (shouldLog) {
+                    std::cout << "[INFO] Large ball gap " << cfg.maxBallGap << "px exceeded. Start new segment (same color)." << std::endl;
                 }
+            }
+
+            auto& segToAdd = trajectorySegments.back();
+            segToAdd.points.push_back(center2D);
+            if (segToAdd.points.size() > maxTrajectoryPoints) {
+                segToAdd.points.pop_front();
             }
 
             // 绘制当前篮球位置
             cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
+            // 绘制外接矩形
+            cv::Rect bbox = cv::boundingRect(contours[maxIdx]);
+            cv::rectangle(undistorted, bbox, cv::Scalar(0, 255, 255), 2);
             cv::drawContours(undistorted, contours, maxIdx, cv::Scalar(0,255,0), 2);
             
             // 显示篮球像素坐标
@@ -355,11 +381,24 @@ void runTrajectorySolverCamera(const Config &cfg)
                       cv::Scalar(0,0,255), 2);
         }
 
+        // ---- 始终绘制所有轨迹段，以便丢失目标后仍显示历史轨迹 ----
+        for (const auto& segment : trajectorySegments) {
+            const cv::Scalar& color = TRAJECTORY_COLORS[segment.colorIndex];
+            for (size_t i = 1; i < segment.points.size(); ++i) {
+                cv::line(undistorted,
+                        segment.points[i-1],
+                        segment.points[i],
+                        color,
+                        2);
+            }
+        }
+
         // 显示图像和检查按键
         cv::imshow(windowName, undistorted);
         int key = cv::waitKey(1);
         if (key == 27) {
-            cv::destroyWindow(binaryWindowName);
+            // cv::destroyWindow(binaryWindowName); // 已禁用二值窗口
+            cv::destroyWindow(motionWindowName);
             break;        // ESC: exit program
         }
         if (key == 32) {

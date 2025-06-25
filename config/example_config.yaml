@@ -18,17 +18,18 @@ dist_coeffs: !!opencv-matrix
        -4.4481086302767137e-01 ]
 
 # ArUco 字典与标签大小
-aruco_dict_id: 7  
-aruco_marker_length: 0.65
+aruco_dict_id: 0  
+aruco_marker_length: 0.60
 
 # ArUco 中心点到地面高度 (米)
-H_marker: 0.115
+H_marker: 0.325
 
 # 数据记录相关参数
 record_enabled: 1  # 1 表示启用记录, 0 表示禁用
 launch_rpm: 3000   # 发射时的转速 (RPM)
 record_dir: "../records"  # 保存CSV的文件夹
-origin_offset: !!opencv-matrix
+max_ball_gap: 120    # 若两帧中心距超过该像素值，则视为误检并断开轨迹
+origin_offset: !!opencv-matrix  #aruco到发射机构的偏移
   rows: 1
   cols: 3
   dt: d
@@ -39,12 +40,12 @@ hsv_low: !!opencv-matrix
   rows: 1
   cols: 3
   dt: i
-  data: [ 0, 167, 37 ]
+  data: [ 0, 0, 0 ]
 hsv_high: !!opencv-matrix
   rows: 1
   cols: 3
   dt: i
-  data: [ 19, 240, 147 ]
+  data: [ 255, 255, 255 ]
 
 # 运动平面
 motion_plane:

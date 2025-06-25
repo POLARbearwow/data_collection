@@ -73,7 +73,7 @@ bool HikCamera::openCamera() {
     }
 
     // 设置曝光时间
-    nRet = MV_CC_SetFloatValue(handle, "ExposureTime", 6000.0f);
+    nRet = MV_CC_SetFloatValue(handle, "ExposureTime", 20000.0f);
     if (MV_OK != nRet) {
         std::cerr << "[HikCamera] Set ExposureTime fail! nRet [0x" << std::hex << nRet << "]" << std::endl;
         return false;

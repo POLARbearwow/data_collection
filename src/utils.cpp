@@ -44,6 +44,37 @@ bool loadConfig(const std::string &filePath, Config &cfg)
         hsv["low"] >> cfg.hsvLow;
         hsv["high"] >> cfg.hsvHigh;
     }
+    else {
+        // 兼容新格式：hsv_low / hsv_high 直接在根节点
+        cv::Mat lowMat, highMat;
+        fs["hsv_low"] >> lowMat;
+        fs["hsv_high"] >> highMat;
+
+        if (!lowMat.empty() && lowMat.total() == 3)
+        {
+            // 支持 int 或 double 类型
+            if (lowMat.type() == CV_64F)
+            {
+                cfg.hsvLow = cv::Scalar(lowMat.at<double>(0), lowMat.at<double>(1), lowMat.at<double>(2));
+            }
+            else
+            {
+                cfg.hsvLow = cv::Scalar(lowMat.at<int>(0), lowMat.at<int>(1), lowMat.at<int>(2));
+            }
+        }
+
+        if (!highMat.empty() && highMat.total() == 3)
+        {
+            if (highMat.type() == CV_64F)
+            {
+                cfg.hsvHigh = cv::Scalar(highMat.at<double>(0), highMat.at<double>(1), highMat.at<double>(2));
+            }
+            else
+            {
+                cfg.hsvHigh = cv::Scalar(highMat.at<int>(0), highMat.at<int>(1), highMat.at<int>(2));
+            }
+        }
+    }
 
     // 尝试读取旧格式的运动平面参数
     cv::Mat planePoint, planeNormal;
@@ -94,6 +125,10 @@ bool loadConfig(const std::string &filePath, Config &cfg)
 
     if (!fs["record_dir"].empty()) {
         fs["record_dir"] >> cfg.recordDir;
+    }
+
+    if (!fs["max_ball_gap"].empty()) {
+        fs["max_ball_gap"] >> cfg.maxBallGap;
     }
 
     fs.release();
