@@ -8,3 +8,5 @@
 ./aruco
 *.avi    
 .jpg
+build/
+frames/

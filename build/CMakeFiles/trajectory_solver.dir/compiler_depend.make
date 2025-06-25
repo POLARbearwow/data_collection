@@ -1694,7 +1694,11 @@ CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: ../src/solver_camera.c
   /opt/MVS/include/CameraParams.h \
   /opt/MVS/include/PixelType.h \
   /opt/MVS/include/MvObsoleteInterfaces.h \
-  /opt/MVS/include/ObsoleteCamParams.h
+  /opt/MVS/include/ObsoleteCamParams.h \
+  /usr/include/c++/11/fstream \
+  /usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h \
+  /usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h \
+  /usr/include/c++/11/bits/fstream.tcc
 
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: ../src/utils.cpp \
   /usr/include/stdc-predef.h \
@@ -2115,6 +2119,12 @@ CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: ../src/utils.cpp \
 
 ../src/utils.cpp:
 
+/usr/include/c++/11/bits/fstream.tcc:
+
+/usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h:
+
+/usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h:
+
 ../src/solver.cpp:
 
 /usr/include/c++/11/bits/fs_ops.h:
@@ -2252,6 +2262,8 @@ CMakeFiles/trajectory_solver.dir/src/utils.cpp.o: ../src/utils.cpp \
 /usr/include/opencv4/opencv2/dnn/dnn.hpp:
 
 /usr/include/opencv4/opencv2/dnn.hpp:
+
+/usr/include/c++/11/fstream:
 
 /usr/include/opencv4/opencv2/imgproc.hpp:
 

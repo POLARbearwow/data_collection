@@ -1699,6 +1699,10 @@ CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o
  /opt/MVS/include/PixelType.h
  /opt/MVS/include/MvObsoleteInterfaces.h
  /opt/MVS/include/ObsoleteCamParams.h
+ /usr/include/c++/11/fstream
+ /usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h
+ /usr/include/c++/11/bits/fstream.tcc
 
 CMakeFiles/trajectory_solver.dir/src/utils.cpp.o
  /home/niu/Desktop/data_collection/src/utils.cpp

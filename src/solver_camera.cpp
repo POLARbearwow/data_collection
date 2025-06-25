@@ -8,6 +8,9 @@
 #include <vector>
 #include <chrono>  // 新增：用于计时
 #include <deque>  // 用于存储轨迹点
+#include <fstream>
+#include <ctime>
+#include <filesystem>
 
 using namespace cv;
 using namespace std;
@@ -59,6 +62,11 @@ void runTrajectorySolverCamera(const Config &cfg)
     cv::Mat frame, undistorted;
     int frameIdx = 0;
     
+    // 记录相关
+    std::ofstream recordFile;
+    bool recording = false;
+    int  sessionIndex = 0;  // 用于文件命名
+
     // 用于控制日志输出频率
     auto lastLogTime = steady_clock::now();
     const auto logInterval = milliseconds(500);  // 0.5秒
@@ -314,6 +322,22 @@ void runTrajectorySolverCamera(const Config &cfg)
                           cv::Point(15, undistorted.rows - 240),
                           cv::FONT_HERSHEY_SIMPLEX, 0.6,
                           cv::Scalar(0,255,0), 2);
+
+                // ---- 数据记录 ----
+                if (recording && recordFile.is_open()) {
+                    // 获取时间戳 (ms)
+                    auto now_ts = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+
+                    // 计算新坐标系下的坐标 (减去偏移量)
+                    cv::Vec3d newPos = intersection - cfg.originOffset;
+
+                    recordFile << now_ts << ","
+                               << intersection[0] << "," << intersection[1] << "," << intersection[2] << ","
+                               << newPos[0]       << "," << newPos[1]       << "," << newPos[2] << ","
+                               << height << ","
+                               << cfg.launchRPM << std::endl;
+                }
             }
         }
         else
@@ -340,6 +364,47 @@ void runTrajectorySolverCamera(const Config &cfg)
         }
         if (key == 32) {
             detectEnabled = !detectEnabled;  // Space: toggle detection only
+
+            // 切换检测状态时，处理记录文件开关
+            if (cfg.recordEnabled)
+            {
+                if (detectEnabled) {
+                    // 开始新的记录会话
+                    if (recordFile.is_open()) recordFile.close();
+
+                    namespace fs = std::filesystem;
+                    try {
+                        fs::create_directories(cfg.recordDir);
+                    } catch (const std::exception &e) {
+                        std::cerr << "[ERROR] Failed to create record directory: " << e.what() << std::endl;
+                    }
+
+                    char filename[128];
+                    std::time_t t = std::time(nullptr);
+                    std::tm *tm_ptr = std::localtime(&t);
+                    std::strftime(filename, sizeof(filename), "record_%Y%m%d_%H%M%S.csv", tm_ptr);
+                    std::string filepath = cfg.recordDir + "/" + filename;
+
+                    recordFile.open(filepath);
+                    if (recordFile.is_open()) {
+                        recording = true;
+                        std::cout << "[INFO] Start recording to " << filepath << std::endl;
+                        // 写入表头
+                        recordFile << "timestamp_ms,x,y,z,new_x,new_y,new_z,height_m,rpm" << std::endl;
+                    } else {
+                        std::cerr << "[ERROR] Failed to open record file: " << filepath << std::endl;
+                    }
+                    ++sessionIndex;
+                }
+                else {
+                    if (recordFile.is_open()) {
+                        std::cout << "[INFO] Stop recording, file closed." << std::endl;
+                        recordFile.close();
+                    }
+                    recording = false;
+                }
+            }
+
             if (detectEnabled) {
                 size_t newColorIndex = (trajectorySegments.back().colorIndex + 1) % TRAJECTORY_COLORS.size();
                 trajectorySegments.push_back({std::deque<cv::Point2f>(), newColorIndex});
@@ -355,4 +420,9 @@ void runTrajectorySolverCamera(const Config &cfg)
     }
 
     camera.closeCamera();
+
+    if (recordFile.is_open()) {
+        std::cout << "[INFO] Stop recording, file closed." << std::endl;
+        recordFile.close();
+    }
 } 

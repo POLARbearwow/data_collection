@@ -360,4 +360,10 @@ CMakeFiles/trajectory_solver.dir/src/solver_camera.cpp.o: \
  /opt/MVS/include/MvCameraControl.h /opt/MVS/include/MvErrorDefine.h \
  /opt/MVS/include/MvISPErrorDefine.h /opt/MVS/include/CameraParams.h \
  /opt/MVS/include/PixelType.h /opt/MVS/include/MvObsoleteInterfaces.h \
- /opt/MVS/include/ObsoleteCamParams.h
+ /opt/MVS/include/ObsoleteCamParams.h /usr/include/c++/11/fstream \
+ /usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h \
+ /usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h \
+ /usr/include/c++/11/bits/fstream.tcc /usr/include/c++/11/filesystem \
+ /usr/include/c++/11/bits/fs_fwd.h /usr/include/c++/11/bits/fs_path.h \
+ /usr/include/c++/11/codecvt /usr/include/c++/11/bits/fs_dir.h \
+ /usr/include/c++/11/bits/fs_ops.h

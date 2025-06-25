@@ -19,6 +19,14 @@ struct Config {
     float arucoMarkerLength = 0.05f;  // 单位: m
     double H_marker = 0.0;            // ArUco 中心点离地高度 (m)
 
+    // 数据记录相关
+    bool  recordEnabled = false;      // 是否启用记录功能
+    cv::Vec3d originOffset{0.0, 0.0, 0.0}; // 新坐标系原点相对 ArUco 坐标系的偏移
+    double launchRPM = 0.0;           // 发射篮球时的转速 (RPM)
+
+    // 记录文件保存目录（可选，默认当前目录）
+    std::string recordDir{"."};
+
     // HSV 阈值
     cv::Scalar hsvLow{0, 167, 37};
     cv::Scalar hsvHigh{19, 240, 147};

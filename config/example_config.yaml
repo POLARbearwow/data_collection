@@ -24,6 +24,16 @@ aruco_marker_length: 0.65
 # ArUco 中心点到地面高度 (米)
 H_marker: 0.115
 
+# 数据记录相关参数
+record_enabled: 1  # 1 表示启用记录, 0 表示禁用
+launch_rpm: 3000   # 发射时的转速 (RPM)
+record_dir: "../records"  # 保存CSV的文件夹
+origin_offset: !!opencv-matrix
+  rows: 1
+  cols: 3
+  dt: d
+  data: [ 0.0, 0.0, 0.0 ]
+
 # HSV 阈值
 hsv_low: !!opencv-matrix
   rows: 1

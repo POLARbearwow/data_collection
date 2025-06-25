@@ -18,6 +18,26 @@ bool loadConfig(const std::string &filePath, Config &cfg)
     fs["aruco_marker_length"] >> cfg.arucoMarkerLength;
     fs["H_marker"] >> cfg.H_marker;
 
+    // 数据记录相关参数（可选）
+    if (!fs["record_enabled"].empty()) {
+        int recEnabledInt = 0;
+        fs["record_enabled"] >> recEnabledInt;
+        cfg.recordEnabled = (recEnabledInt != 0);
+    }
+
+    cv::FileNode offsetNode = fs["origin_offset"];
+    if (!offsetNode.empty()) {
+        cv::Mat offsetMat;
+        offsetNode >> offsetMat;
+        if (offsetMat.total() == 3) {
+            cfg.originOffset = cv::Vec3d(offsetMat.at<double>(0), offsetMat.at<double>(1), offsetMat.at<double>(2));
+        }
+    }
+
+    if (!fs["launch_rpm"].empty()) {
+        fs["launch_rpm"] >> cfg.launchRPM;
+    }
+
     cv::FileNode hsv = fs["hsv_range"];
     if (!hsv.empty())
     {
@@ -70,6 +90,10 @@ bool loadConfig(const std::string &filePath, Config &cfg)
         {
             std::cerr << "警告: 未找到运动平面参数，使用默认值" << std::endl;
         }
+    }
+
+    if (!fs["record_dir"].empty()) {
+        fs["record_dir"] >> cfg.recordDir;
     }
 
     fs.release();
