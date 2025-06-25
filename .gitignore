@@ -9,4 +9,4 @@
 *.avi    
 .jpg
 build/
-frames/
+frames/build/
