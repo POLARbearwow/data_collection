@@ -26,14 +26,14 @@ H_marker: 0.325
 
 # 数据记录相关参数
 record_enabled: 1  # 1 表示启用记录, 0 表示禁用
-launch_rpm: 3000   # 发射时的转速 (RPM)
+launch_rpm: 3636   # 发射时的转速 (RPM)
 record_dir: "../records"  # 保存CSV的文件夹
 max_ball_gap: 120    # 若两帧中心距超过该像素值，则视为误检并断开轨迹
 origin_offset: !!opencv-matrix  #aruco到发射机构的偏移
   rows: 1
   cols: 3
   dt: d
-  data: [ 0.0, 0.0, 0.0 ]
+  data: [ 0.775, 4.91, 0.0 ]
 
 # HSV 阈值
 hsv_low: !!opencv-matrix
@@ -53,7 +53,7 @@ motion_plane:
     rows: 1
     cols: 3
     dt: d
-    data: [ 10.0, 10.0, 0.5 ]
+    data: [ 0.0, 0.0, 0.0 ]
   normal: !!opencv-matrix
     rows: 1
     cols: 3
