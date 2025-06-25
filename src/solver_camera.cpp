@@ -82,7 +82,7 @@ void runTrajectorySolverCamera(const Config &cfg)
     const size_t maxTrajectoryPoints = 1000;
 
     // 添加面积阈值
-    const double MIN_CONTOUR_AREA = 5000.0;  // 最小轮廓面积阈值
+    const double MIN_CONTOUR_AREA = 300.0;  // 最小轮廓面积阈值
     double currentMaxArea = 0.0;  // 用于显示当前最大轮廓面积
 
     // 创建形态学操作的核
@@ -124,7 +124,50 @@ void runTrajectorySolverCamera(const Config &cfg)
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, 
                    cv::Scalar(255, 255, 255), 2);
 
-        // 篮球检测和处理（始终进行）
+        // 持续进行ArUco检测
+        std::vector<int> markerIds;
+        std::vector<std::vector<cv::Point2f>> corners;
+        cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cfg.arucoDictId);
+        cv::Ptr<cv::aruco::DetectorParameters> detectorParams = cv::aruco::DetectorParameters::create();
+        cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds, detectorParams);
+
+        bool hasValidAruco = false;
+        std::vector<cv::Vec3d> rvecs, tvecs;
+        
+        if (!markerIds.empty())
+        {
+            hasValidAruco = true;
+            cv::aruco::estimatePoseSingleMarkers(corners, cfg.arucoMarkerLength, cfg.K, cfg.distCoeffs, rvecs, tvecs);
+            
+            // 绘制检测到的ArUco标记
+            cv::aruco::drawDetectedMarkers(undistorted, corners, markerIds);
+            
+            for (size_t i = 0; i < markerIds.size(); ++i)
+            {
+                // 绘制坐标轴
+                cv::aruco::drawAxis(undistorted, cfg.K, cfg.distCoeffs, rvecs[i], tvecs[i], cfg.arucoMarkerLength);
+                
+                // 在标记上显示ID
+                cv::putText(undistorted, 
+                          cv::format("ArUco ID: %d", markerIds[i]), 
+                          corners[i][0], 
+                          cv::FONT_HERSHEY_SIMPLEX, 0.6, 
+                          cv::Scalar(0,255,255), 2);
+
+                // 显示ArUco标记的3D位置
+                cv::Vec3d tvec = tvecs[i];
+                cv::putText(undistorted,
+                          cv::format("ArUco %d Pos: (%.2f, %.2f, %.2f)m", 
+                                   markerIds[i], tvec[0], tvec[1], tvec[2]),
+                          cv::Point(15, 30 + i * 30),
+                          cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                          cv::Scalar(255,255,0), 2);
+            }
+        }
+
+        // 篮球检测
+        bool hasValidBall = false;
+        cv::Point2f center2D;
         cv::Mat hsv, mask, morphed;
         cv::cvtColor(undistorted, hsv, cv::COLOR_BGR2HSV);
         cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
@@ -194,9 +237,10 @@ void runTrajectorySolverCamera(const Config &cfg)
 
         if (detectEnabled && maxIdx >= 0 && maxArea >= MIN_CONTOUR_AREA)
         {
+            hasValidBall = true;
             // 计算篮球中心点
             cv::Moments m = cv::moments(contours[maxIdx]);
-            cv::Point2f center2D(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
+            center2D = cv::Point2f(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
             
             // 添加新的轨迹点到当前段
             auto& currentSegment = trajectorySegments.back();
@@ -217,55 +261,74 @@ void runTrajectorySolverCamera(const Config &cfg)
                 }
             }
 
-            // 绘制当前点（红色）和轮廓
+            // 绘制当前篮球位置
             cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
             cv::drawContours(undistorted, contours, maxIdx, cv::Scalar(0,255,0), 2);
+            
+            // 显示篮球像素坐标
+            cv::putText(undistorted, 
+                       cv::format("Ball Pixel Pos: (%.1f, %.1f)", center2D.x, center2D.y),
+                       cv::Point(15, undistorted.rows - 150),
+                       cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0,255,255), 2);
+        }
 
-            // ArUco 检测和坐标计算
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f>> corners;
-            cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cfg.arucoDictId);
-            cv::Ptr<cv::aruco::DetectorParameters> detectorParams = cv::aruco::DetectorParameters::create();
-            cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds, detectorParams);
+        // 当同时检测到篮球和ArUco标记时，进行坐标解算
+        if (hasValidBall && hasValidAruco)
+        {
+            // 计算并显示世界坐标
+            cv::Mat Rmat;
+            cv::Rodrigues(rvecs[0], Rmat);
+            cv::Matx33d R(Rmat);
+            cv::Vec3d rayWorld = R.t()*pixelToCameraRay(center2D, cfg.K);
+            cv::Vec3d tvecVec(tvecs[0][0], tvecs[0][1], tvecs[0][2]);
+            cv::Vec3d camPosWorld = -(R.t()*tvecVec);
 
-            if (!markerIds.empty())
+            cv::Vec3d intersection;
+            if(intersectRayPlane(camPosWorld, rayWorld, cfg.motionPlane, intersection))
             {
-                std::vector<cv::Vec3d> rvecs, tvecs;
-                cv::aruco::estimatePoseSingleMarkers(corners, cfg.arucoMarkerLength, cfg.K, cfg.distCoeffs, rvecs, tvecs);
-                cv::aruco::drawDetectedMarkers(undistorted, corners, markerIds);
-                for (size_t i = 0; i < markerIds.size(); ++i)
-                {
-                    cv::aruco::drawAxis(undistorted, cfg.K, cfg.distCoeffs, rvecs[i], tvecs[i], cfg.arucoMarkerLength);
-                    cv::putText(undistorted, cv::format("ID:%d", markerIds[i]), corners[i][0], cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0,255,255), 2);
+                double height = cfg.H_marker + intersection[0];
+                if (shouldLog) {
+                    std::cout << "[LOG] World coordinates = (" 
+                             << intersection[0] << ", " 
+                             << intersection[1] << ", " 
+                             << intersection[2] << ") Height = " 
+                             << height << " m" << std::endl;
                 }
+                
+                // 在图像上标注坐标解算结果（使用 ArUco 坐标系）
+                cv::putText(undistorted, 
+                          cv::format("Ball ArUco Pos: (%.2f, %.2f, %.2f)m", 
+                                   intersection[0], intersection[1], intersection[2]),
+                          cv::Point(15, undistorted.rows - 300),
+                          cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                          cv::Scalar(255,0,0), 2);
+                cv::putText(undistorted, 
+                          cv::format("Ball Height H: %.2f m", height),
+                          cv::Point(15, undistorted.rows - 270),
+                          cv::FONT_HERSHEY_SIMPLEX, 1.2,
+                          cv::Scalar(255,0,0), 2);
 
-                // 显示第一个ArUco标记相对于相机的信息
-                cv::Vec3d tvec_cam = tvecs[0];
-                double dist_cam = cv::norm(tvec_cam);
-                cv::String cam_info_pos = cv::format("Marker Pos @Cam: (%.2f, %.2f, %.2f)m", tvec_cam[0], tvec_cam[1], tvec_cam[2]);
-                cv::String cam_info_dist = cv::format("Marker Dist @Cam: %.2f m", dist_cam);
-                cv::putText(undistorted, cam_info_pos, cv::Point(15, undistorted.rows - 60), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 0), 2);
-                cv::putText(undistorted, cam_info_dist, cv::Point(15, undistorted.rows - 30), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 0), 2);
-
-                cv::Mat Rmat;
-                cv::Rodrigues(rvecs[0], Rmat);
-                cv::Matx33d R(Rmat);
-                cv::Vec3d rayWorld = R.t()*pixelToCameraRay(center2D, cfg.K);
-                cv::Vec3d tvecVec(tvecs[0][0], tvecs[0][1], tvecs[0][2]);
-                cv::Vec3d camPosWorld = -(R.t()*tvecVec);
-
-                cv::Vec3d intersection;
-                if(intersectRayPlane(camPosWorld, rayWorld, cfg.motionPlane, intersection))
-                {
-                    double height = cfg.H_marker + intersection[0];
-                    if (shouldLog) {
-                        std::cout << "[LOG] World coordinates = (" << intersection[0] << ", " << intersection[1] << ", " << intersection[2] << ") Height = " << height << " m" << std::endl;
-                    }
-                    cv::putText(undistorted, cv::format("Pos: (%.2f,%.2f,%.2f)m", intersection[0], intersection[1], intersection[2]),
-                                cv::Point(15,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,0,0),2);
-                    cv::putText(undistorted, cv::format("Height: %.2f m", height), cv::Point(15,60), cv::FONT_HERSHEY_SIMPLEX,0.8, cv::Scalar(255,0,0),2);
-                }
+                // 添加状态指示
+                cv::putText(undistorted,
+                          "Status: Ball & ArUco detected - Computing coordinates",
+                          cv::Point(15, undistorted.rows - 240),
+                          cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                          cv::Scalar(0,255,0), 2);
             }
+        }
+        else
+        {
+            // 显示当前检测状态
+            std::string status = "Status: ";
+            if (!hasValidBall && !hasValidAruco) status += "No Ball & No ArUco detected";
+            else if (!hasValidBall) status += "No Ball detected";
+            else if (!hasValidAruco) status += "No ArUco detected";
+            
+            cv::putText(undistorted,
+                      status,
+                      cv::Point(15, undistorted.rows - 240),
+                      cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                      cv::Scalar(0,0,255), 2);
         }
 
         // 显示图像和检查按键

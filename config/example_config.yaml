@@ -19,7 +19,7 @@ dist_coeffs: !!opencv-matrix
 
 # ArUco 字典与标签大小
 aruco_dict_id: 7  
-aruco_marker_length: 0.167
+aruco_marker_length: 0.65
 
 # ArUco 中心点到地面高度 (米)
 H_marker: 0.115

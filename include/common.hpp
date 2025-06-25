@@ -15,7 +15,7 @@ struct Config {
     cv::Mat distCoeffs;     // 畸变系数
 
     // ArUco 参数
-    int   arucoDictId   = cv::aruco::DICT_6X6_250;
+    int   arucoDictId   = cv::aruco::DICT_4X4_50;
     float arucoMarkerLength = 0.05f;  // 单位: m
     double H_marker = 0.0;            // ArUco 中心点离地高度 (m)
 
