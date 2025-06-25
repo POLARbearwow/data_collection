@@ -73,25 +73,25 @@ bool HikCamera::openCamera() {
     }
 
     // 设置曝光时间
-    nRet = MV_CC_SetFloatValue(handle, "ExposureTime", 6000.0f);
+    nRet = MV_CC_SetFloatValue(handle, "ExposureTime", 5000.0f);
     if (MV_OK != nRet) {
         std::cerr << "[HikCamera] Set ExposureTime fail! nRet [0x" << std::hex << nRet << "]" << std::endl;
         return false;
     }
 
-    // 设置手动增益
-    nRet = MV_CC_SetEnumValue(handle, "GainAuto", 0);
+    // 设置手动增益,0:手动,1:once,2:自动
+    nRet = MV_CC_SetEnumValue(handle, "GainAuto", 2);
     if (MV_OK != nRet) {
         std::cerr << "[HikCamera] Set GainAuto fail! nRet [0x" << std::hex << nRet << "]" << std::endl;
         return false;
     }
 
     // 设置增益值
-    nRet = MV_CC_SetFloatValue(handle, "Gain", 23.9f);
-    if (MV_OK != nRet) {
-        std::cerr << "[HikCamera] Set Gain fail! nRet [0x" << std::hex << nRet << "]" << std::endl;
-        return false;
-    }
+    // nRet = MV_CC_SetFloatValue(handle, "Gain", 23.9f);
+    // if (MV_OK != nRet) {
+    //     std::cerr << "[HikCamera] Set Gain fail! nRet [0x" << std::hex << nRet << "]" << std::endl;
+    //     return false;
+    // }
 
     // 设置像素格式为RGB8
     std::cout << "[HikCamera] 设置像素格式..." << std::endl;

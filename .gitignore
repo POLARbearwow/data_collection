@@ -1,10 +1,11 @@
+frames/
+build/
 ./videos
 ./pictures
 ./videos2
 ./frames
 ./pictures2
 ./.vscode
-./build
 ./aruco
 *.avi    
 .jpg

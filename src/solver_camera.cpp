@@ -1,5 +1,6 @@
 #include "solver.hpp"
 #include "hik_camera.hpp"
+#include "basketball_detector.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
@@ -176,79 +177,51 @@ void runTrajectorySolverCamera(const Config &cfg)
         // 篮球检测
         bool hasValidBall = false;
         cv::Point2f center2D;
-        cv::Mat hsv, mask, morphed;
-        cv::cvtColor(undistorted, hsv, cv::COLOR_BGR2HSV);
-        cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-
-        // 形态学操作
-        cv::erode(mask, morphed, morphKernel, cv::Point(-1,-1), 2);
-        cv::dilate(morphed, morphed, morphKernel, cv::Point(-1,-1), 2);
-
+        
+        BasketballDetector detector;
+        detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+        auto ballResult = detector.detect(undistorted);
+        
         // 创建可视化图像
-        const int vizWidth = mask.cols * 2;
-        const int vizHeight = mask.rows;
+        const int vizWidth = ballResult.mask.cols * 2;
+        const int vizHeight = ballResult.mask.rows;
         processViz = cv::Mat::zeros(vizHeight, vizWidth, CV_8UC3);
 
         // 转换掩码为彩色图像以便显示
         cv::Mat maskViz, morphedViz;
-        cv::cvtColor(mask, maskViz, cv::COLOR_GRAY2BGR);
-        cv::cvtColor(morphed, morphedViz, cv::COLOR_GRAY2BGR);
+        cv::cvtColor(ballResult.mask, maskViz, cv::COLOR_GRAY2BGR);
+        
+        // 如果检测到篮球，显示检测结果
+        if (ballResult.found) {
+            cv::cvtColor(ballResult.mask, morphedViz, cv::COLOR_GRAY2BGR);
+            // 在掩码上绘制检测结果
+            for (const auto &p : ballResult.inliers) {
+                cv::circle(morphedViz, p, 2, cv::Scalar(255,0,255), -1);
+            }
+            cv::circle(morphedViz, ballResult.center, (int)ballResult.radius, cv::Scalar(0,255,0), 2);
+        } else {
+            cv::cvtColor(ballResult.mask, morphedViz, cv::COLOR_GRAY2BGR);
+        }
 
         // 在可视化图像中并排显示原始掩码和处理后的图像
-        maskViz.copyTo(processViz(cv::Rect(0, 0, mask.cols, mask.rows)));
-        morphedViz.copyTo(processViz(cv::Rect(mask.cols, 0, mask.cols, mask.rows)));
+        maskViz.copyTo(processViz(cv::Rect(0, 0, ballResult.mask.cols, ballResult.mask.rows)));
+        morphedViz.copyTo(processViz(cv::Rect(ballResult.mask.cols, 0, ballResult.mask.cols, ballResult.mask.rows)));
 
         // 添加标题
         cv::putText(processViz, "Original Mask", 
                    cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 
                    0.8, cv::Scalar(0,255,0), 2);
-        cv::putText(processViz, "After Morphology", 
-                   cv::Point(mask.cols + 10, 30), cv::FONT_HERSHEY_SIMPLEX, 
+        cv::putText(processViz, "Detection Result", 
+                   cv::Point(ballResult.mask.cols + 10, 30), cv::FONT_HERSHEY_SIMPLEX, 
                    0.8, cv::Scalar(0,255,0), 2);
 
         // 显示处理过程
         cv::imshow(binaryWindowName, processViz);
 
-        // 轮廓检测（始终进行）
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(morphed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-        double maxArea = 0; 
-        int maxIdx = -1;
-        
-        // 计算最大面积的轮廓
-        for (size_t i = 0; i < contours.size(); ++i)
-        {
-            double area = cv::contourArea(contours[i]);
-            if (area > maxArea) {
-                maxArea = area;
-                maxIdx = (int)i;
-            }
-        }
-
-        currentMaxArea = maxArea;  // 更新当前最大面积
-
-        // 显示当前最大轮廓面积
-        cv::putText(undistorted, 
-                   cv::format("Max Contour Area: %.1f", currentMaxArea),
-                   cv::Point(15, undistorted.rows - 150),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                   currentMaxArea >= MIN_CONTOUR_AREA ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255),
-                   2);
-
-        // 显示面积阈值
-        cv::putText(undistorted,
-                   cv::format("Area Threshold: %.1f", MIN_CONTOUR_AREA),
-                   cv::Point(15, undistorted.rows - 180),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                   cv::Scalar(255, 255, 255),
-                   2);
-
-        if (detectEnabled && maxIdx >= 0 && maxArea >= MIN_CONTOUR_AREA)
+        if (detectEnabled && ballResult.found)
         {
             hasValidBall = true;
-            // 计算篮球中心点
-            cv::Moments m = cv::moments(contours[maxIdx]);
-            center2D = cv::Point2f(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
+            center2D = ballResult.center;
             
             // 添加新的轨迹点到当前段
             auto& currentSegment = trajectorySegments.back();
@@ -271,7 +244,6 @@ void runTrajectorySolverCamera(const Config &cfg)
 
             // 绘制当前篮球位置
             cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
-            cv::drawContours(undistorted, contours, maxIdx, cv::Scalar(0,255,0), 2);
             
             // 显示篮球像素坐标
             cv::putText(undistorted, 
