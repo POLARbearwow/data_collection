@@ -6,10 +6,25 @@
 
 - **ArUco 标记识别**：自动检测视野内的 ArUco 标记，并以此建立稳定的世界坐标系。
 - **三维位姿估计**：实时计算并显示 ArUco 标记相对于相机的位置、姿态和距离。
-- **篮球检测**：通过可配置的 HSV 颜色阈值分割出篮球，并找到其像素中心。
+- **篮球检测（统一接口）**：所有篮球检测、滤波、RANSAC圆拟合、平滑（Kalman）等均由 `BasketballDetector` 类实现，主程序、调试工具等均通过 `detector.detect` 接口调用，便于维护和扩展。
+- **实时调试 / 标定工具 (`basketball_tool`)**：支持按键 `h` 采样 HSV、`f` 调节滤波，使用 **中值滤波** 去噪，并可按 `r` 录制原始视频。
 - **三维坐标解算**：结合相机内参与 ArUco 位姿，将篮球的 2D 像素位置反向投影，计算出其在世界坐标系下的 3D 坐标。
 - **视频与图像支持**：支持对视频流和单张静态图片进行分析。
 - **辅助工具**：提供一个 Python 脚本，可方便地将视频文件拆分为图片帧序列。
+
+## 篮球检测统一接口说明
+
+- 所有 C++ 主程序（trajectory_solver）、调试工具（basketball_tool）等都通过 `BasketballDetector` 类进行篮球检测。
+- 只需如下用法即可完成检测：
+  ```cpp
+  BasketballDetector detector;
+  detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh); // 可选，设置HSV参数
+  auto result = detector.detect(frame); // 返回检测结果
+  if (result.found) { /* 使用 result.center, result.radius, result.smoothedCenter 等 */ }
+  ```
+- `BasketballDetector` 支持参数化（如最小内点数、滤波核大小等），可通过接口灵活调整。
+- 检测流程包括：HSV分割、形态学滤波、RANSAC圆拟合、inlier约束、Kalman平滑等，全部封装于类内。
+- HSV采样/标定模式下可关闭滤波，仅显示掩码。
 
 ## 环境依赖
 
@@ -116,4 +131,30 @@ python3 scripts/extract_frames.py --video <video_path> --out <output_dir> [optio
 ```bash
 python3 scripts/extract_frames.py --video videos/my_basketball_video.mp4 --out extracted_images --stride 10
 ```
-图片将以 `frame_xxxxxx.jpg` 的格式保存在 `extracted_images` 文件夹中。 
+图片将以 `frame_xxxxxx.jpg` 的格式保存在 `extracted_images` 文件夹中。
+
+### 3. HSV 标定与中值滤波调试工具 (`basketball_tool`)
+
+`basketball_tool` 直接连接海康相机，实现可视化标定与调试。主要热键：
+
+| 键位 | 功能 |
+| ---- | -------------------------------------------------------------- |
+| h    | 冻结当前帧并进入 HSV 采样模式，点击原图采样颜色点 |
+| c    | 清空已采样的 HSV 颜色点 |
+| f    | 冻结画面并弹出"Filter Params"窗口，调节闭运算 & 中值滤波窗口大小 |
+| r    | 开始/停止录像（保存为 MJPG，分辨率与原相机一致） |
+| ESC/q| 退出程序 |
+
+`Filter Params` 窗口参数说明：
+
+* **CloseKernel**：闭运算核大小 (奇数)
+* **CloseIter**：闭运算迭代次数
+* **MedianKernel**：中值滤波核大小 (奇数, 0 表示关闭)
+
+编译完成后运行：
+
+```bash
+./build/basketball_tool
+```
+
+程序将开启 1280 × H 的固定大小调试窗口（左：原图，右：掩码）。 

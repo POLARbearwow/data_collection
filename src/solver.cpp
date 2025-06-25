@@ -1,5 +1,6 @@
 #include "solver.hpp"
 #include "hik_camera.hpp"
+#include "basketball_detector.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <iostream>
@@ -113,34 +114,20 @@ void runTrajectorySolver(const std::string &videoPath, const Config &cfg)
             continue;
         }
 
-        // 篮球 HSV 分割
-        Mat hsv, mask;
-        cvtColor(undistorted, hsv, COLOR_BGR2HSV);
-        inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-        Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
-        morphologyEx(mask, mask, MORPH_OPEN, kernel);
-        morphologyEx(mask, mask, MORPH_CLOSE, kernel);
-
-        // 最大轮廓
-        vector<vector<Point>> contours;
-        findContours(mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-        cout << "[LOG] 共检测到 " << contours.size() << " 个候选轮廓" << endl;
-        double maxArea = 0; int maxIdx = -1;
-        for (size_t i=0;i<contours.size();++i)
+        // 篮球检测
+        BasketballDetector detector;
+        detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+        auto ballResult = detector.detect(undistorted);
+        
+        if (!ballResult.found)
         {
-            double a = contourArea(contours[i]);
-            if (a>maxArea){maxArea=a;maxIdx=i;}
-        }
-        if (maxIdx<0)
-        {
-            cout << "[WARN] 未找到满足面积要求的轮廓，跳过" << endl;
+            cout << "[WARN] 未检测到篮球，跳过后续计算" << endl;
             imshow("debug", undistorted);
-            if (waitKey(1)==27) break;
+            if (waitKey(1) == 27) break;
             continue;
         }
 
-        Moments m = moments(contours[maxIdx]);
-        Point2f center2D(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
+        Point2f center2D = ballResult.center;
         circle(undistorted, center2D, 5, Scalar(0,0,255), -1);
 
         cout << fixed << setprecision(2);
@@ -164,7 +151,6 @@ void runTrajectorySolver(const std::string &videoPath, const Config &cfg)
             putText(undistorted, format("H=%.2f m", height), Point(15,60), FONT_HERSHEY_SIMPLEX,0.8,Scalar(255,0,0),2);
         }
 
-        drawContours(undistorted, contours, maxIdx, Scalar(0,255,0),2);
         imshow("debug", undistorted);
         if (waitKey(1)==27) break;
     }
@@ -230,32 +216,20 @@ void runTrajectorySolverImage(const std::string &imagePath, const Config &cfg)
         return;
     }
 
-    // HSV 分割
-    cv::Mat hsv, mask;
-    cv::cvtColor(undistorted, hsv, cv::COLOR_BGR2HSV);
-    cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5,5));
-    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    double maxArea = 0; int maxIdx = -1;
-    for (size_t i = 0; i < contours.size(); ++i)
+    // 篮球检测
+    BasketballDetector detector;
+    detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+    auto ballResult = detector.detect(undistorted);
+    
+    if (!ballResult.found)
     {
-        double a = cv::contourArea(contours[i]);
-        if (a > maxArea) { maxArea = a; maxIdx = (int)i; }
-    }
-    if (maxIdx < 0)
-    {
-        std::cout << "[WARN] 未找到满足面积要求的轮廓" << std::endl;
+        std::cout << "[WARN] 未检测到篮球" << std::endl;
         cv::imshow("result", undistorted);
         cv::waitKey(0);
         return;
     }
 
-    cv::Moments m = cv::moments(contours[maxIdx]);
-    cv::Point2f center2D(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
+    cv::Point2f center2D = ballResult.center;
     cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
 
     std::cout << std::fixed << std::setprecision(2);
@@ -278,7 +252,6 @@ void runTrajectorySolverImage(const std::string &imagePath, const Config &cfg)
         cv::putText(undistorted, cv::format("H=%.2f m", height), cv::Point(15,60), cv::FONT_HERSHEY_SIMPLEX,0.8, cv::Scalar(255,0,0),2);
     }
 
-    cv::drawContours(undistorted, contours, maxIdx, cv::Scalar(0,255,0), 2);
     cv::imshow("result", undistorted);
     cv::waitKey(0);
 } 
