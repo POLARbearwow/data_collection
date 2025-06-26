@@ -42,6 +42,9 @@ struct Config {
     double roiRightMarginRatio  = 0.1;   // 默认右侧去除 10%
     double roiTopMarginRatio    = 0.0;   // 默认不去除顶部
     double roiBottomMarginRatio = 0.0;   // 默认不去除底部
+
+    // ROI 视频录制保存目录
+    std::string roiVideoDir{"."};
 };
 
 // 从 YAML 文件加载所有配置参数

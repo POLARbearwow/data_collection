@@ -71,6 +71,10 @@ void runTrajectorySolverCamera(const Config &cfg)
     bool recording = false;
     int  sessionIndex = 0;  // 用于文件命名
 
+    // ROI 视频录制相关
+    bool roiRec = false;
+    cv::VideoWriter roiWriter;
+
     // 用于控制日志输出频率
     auto lastLogTime = steady_clock::now();
     const auto logInterval = milliseconds(500);  // 0.5秒
@@ -154,7 +158,7 @@ void runTrajectorySolverCamera(const Config &cfg)
         cv::dilate(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 2);
 
         // 显示检测状态
-        string statusText = detectEnabled ? "Detection: ON [Space to toggle]" : "Detection: OFF [Space to toggle]";
+        string statusText = detectEnabled ? "Detection: ON [Space]" : "Detection: OFF [Space]";
         cv::putText(undistorted, statusText, 
                    cv::Point(15, undistorted.rows - 90),
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, 
@@ -165,6 +169,13 @@ void runTrajectorySolverCamera(const Config &cfg)
                    cv::Point(15, undistorted.rows - 120),
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, 
                    cv::Scalar(255, 255, 255), 2);
+
+        // 显示 ROI 录制状态
+        string recText = roiRec ? "ROI Rec: ON [V]" : "ROI Rec: OFF [V]";
+        cv::putText(undistorted, recText,
+                   cv::Point(15, undistorted.rows - 60),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                   roiRec ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
 
         // 持续进行ArUco检测
         std::vector<int> markerIds;
@@ -439,6 +450,11 @@ void runTrajectorySolverCamera(const Config &cfg)
             cv::addWeighted(overlay, alpha, undistorted, 1 - alpha, 0, undistorted);
         }
 
+        // ---- ROI 视频录制 ----
+        if (roiRec && roiWriter.isOpened()) {
+            roiWriter.write(frame); // 录制摄像头原始画面
+        }
+
         // 显示图像和检查按键
         cv::imshow(windowName, undistorted);
         int key = cv::waitKey(1);
@@ -502,9 +518,52 @@ void runTrajectorySolverCamera(const Config &cfg)
                 std::cout << "[INFO] Trajectory cleared" << std::endl;
             }
         }
+        if (key == 'v' || key == 'V') {
+            roiRec = !roiRec;
+            if (roiRec) {
+                // 开启录制
+                char fname[128];
+                std::time_t t = std::time(nullptr);
+                std::tm *tm_ptr = std::localtime(&t);
+                std::strftime(fname, sizeof(fname), "roi_%Y%m%d_%H%M%S.avi", tm_ptr);
+                std::string filepath = cfg.roiVideoDir + "/" + fname;
+                // 确保目录存在
+                namespace fs = std::filesystem;
+                try { fs::create_directories(cfg.roiVideoDir); } catch (...) {}
+                int fourcc = cv::VideoWriter::fourcc('F','F','V','1');
+                double fps = 0; // 0 让容器决定; 若需固定可设置实际摄像头帧率
+                roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
+                if (!roiWriter.isOpened()) {
+                    // 尝试 MJPG + 质量 100 作为退备
+                    fourcc = cv::VideoWriter::fourcc('M','J','P','G');
+                    fps = 200.0;
+                    roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
+                    if (roiWriter.isOpened()) {
+                        roiWriter.set(cv::VIDEOWRITER_PROP_QUALITY, 100);
+                    }
+                }
+                if (!roiWriter.isOpened()) {
+                    std::cerr << "[ERROR] 无法打开 ROI 视频文件 " << filepath << std::endl;
+                    roiRec = false;
+                } else {
+                    std::cout << "[INFO] 开始 ROI 录制: " << filepath << std::endl;
+                }
+            } else {
+                // 关闭录制
+                if (roiWriter.isOpened()) {
+                    roiWriter.release();
+                    std::cout << "[INFO] 停止 ROI 录制" << std::endl;
+                }
+            }
+        }
     }
 
     camera.closeCamera();
+
+    if (roiWriter.isOpened()) {
+        roiWriter.release();
+        std::cout << "[INFO] ROI 录制文件已关闭" << std::endl;
+    }
 
     if (recordFile.is_open()) {
         std::cout << "[INFO] Stop recording, file closed." << std::endl;

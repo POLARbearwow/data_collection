@@ -131,6 +131,11 @@ bool loadConfig(const std::string &filePath, Config &cfg)
         fs["max_ball_gap"] >> cfg.maxBallGap;
     }
 
+    // ROI 视频保存目录
+    if (!fs["roi_video_dir"].empty()) {
+        fs["roi_video_dir"] >> cfg.roiVideoDir;
+    }
+
     // ROI 边缘比例 (可选) —— 新格式
     auto clampRatio = [](double &v){
         if (v < 0.0) v = 0.0;

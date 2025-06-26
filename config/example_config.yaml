@@ -69,3 +69,6 @@ motion_plane:
     cols: 3
     dt: d
     data: [ 0.0, 0.0, 1.0 ]
+
+# ROI 视频保存目录
+roi_video_dir: "../roi_videos"
