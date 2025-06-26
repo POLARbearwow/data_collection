@@ -29,6 +29,16 @@ record_enabled: 1  # 1 表示启用记录, 0 表示禁用
 launch_rpm: 3636   # 发射时的转速 (RPM)
 record_dir: "../records"  # 保存CSV的文件夹
 max_ball_gap: 120    # 若两帧中心距超过该像素值，则视为误检并断开轨迹
+
+# ROI 检测区域 (0~0.5): 左右/上下可单独设置
+roi_left_margin_ratio: 0.1   # 左侧去除10%
+roi_right_margin_ratio: 0.6  # 右侧去除10%
+roi_top_margin_ratio: 0.2   # 上方去除5%
+roi_bottom_margin_ratio: 0.3 # 底部不去除
+
+# (可选) 若仍使用旧版单边比例，可保留 roi_side_margin_ratio 键
+roi_side_margin_ratio: 0.0
+
 origin_offset: !!opencv-matrix  #aruco到发射机构的偏移
   rows: 1
   cols: 3

@@ -131,6 +131,32 @@ bool loadConfig(const std::string &filePath, Config &cfg)
         fs["max_ball_gap"] >> cfg.maxBallGap;
     }
 
+    // ROI 边缘比例 (可选) —— 新格式
+    auto clampRatio = [](double &v){
+        if (v < 0.0) v = 0.0;
+        else if (v > 0.49) v = 0.49;
+    };
+
+    if (!fs["roi_left_margin_ratio"].empty())  fs["roi_left_margin_ratio"]  >> cfg.roiLeftMarginRatio;
+    if (!fs["roi_right_margin_ratio"].empty()) fs["roi_right_margin_ratio"] >> cfg.roiRightMarginRatio;
+    if (!fs["roi_top_margin_ratio"].empty())   fs["roi_top_margin_ratio"]   >> cfg.roiTopMarginRatio;
+    if (!fs["roi_bottom_margin_ratio"].empty())fs["roi_bottom_margin_ratio"]>> cfg.roiBottomMarginRatio;
+
+    clampRatio(cfg.roiLeftMarginRatio);
+    clampRatio(cfg.roiRightMarginRatio);
+    clampRatio(cfg.roiTopMarginRatio);
+    clampRatio(cfg.roiBottomMarginRatio);
+
+    // 兼容旧格式 roi_side_margin_ratio：若新键未指定，则使用旧值
+    if (!fs["roi_side_margin_ratio"].empty()) {
+        double oldRatio = 0.0;
+        fs["roi_side_margin_ratio"] >> oldRatio;
+        clampRatio(oldRatio);
+        // 仅当左右未在新格式中显式给出时，才使用旧值
+        if (fs["roi_left_margin_ratio"].empty())  cfg.roiLeftMarginRatio  = oldRatio;
+        if (fs["roi_right_margin_ratio"].empty()) cfg.roiRightMarginRatio = oldRatio;
+    }
+
     fs.release();
     return true;
 } 

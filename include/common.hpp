@@ -36,6 +36,12 @@ struct Config {
 
     // 运动平面定义
     Plane motionPlane;
+
+    // ROI 边缘比例 (0~0.5)。可分别设置左右 / 上下。
+    double roiLeftMarginRatio   = 0.1;   // 默认左侧去除 10%
+    double roiRightMarginRatio  = 0.1;   // 默认右侧去除 10%
+    double roiTopMarginRatio    = 0.0;   // 默认不去除顶部
+    double roiBottomMarginRatio = 0.0;   // 默认不去除底部
 };
 
 // 从 YAML 文件加载所有配置参数

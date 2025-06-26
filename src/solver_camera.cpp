@@ -127,9 +127,28 @@ void runTrajectorySolverCamera(const Config &cfg)
 
         cv::undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
 
-        // ===== 背景减除，获取前景运动区域 =====
+        // ===== ROI 计算：根据配置左右边缘比例 =====
+        const int frameW = undistorted.cols;
+        const int frameH = undistorted.rows;
+        const int leftX   = static_cast<int>(frameW * cfg.roiLeftMarginRatio   + 0.5);
+        const int rightX  = static_cast<int>(frameW * cfg.roiRightMarginRatio  + 0.5);
+        const int topY    = static_cast<int>(frameH * cfg.roiTopMarginRatio    + 0.5);
+        const int bottomY = static_cast<int>(frameH * cfg.roiBottomMarginRatio + 0.5);
+
+        const int roiW = frameW - leftX - rightX;
+        const int roiH = frameH - topY - bottomY;
+
+        if (roiW <= 0 || roiH <= 0) {
+            std::cerr << "[ERROR] ROI 尺寸为非正值，请检查 margin 配置" << std::endl;
+            break;
+        }
+
+        const cv::Rect roiRect(leftX, topY, roiW, roiH);
+        cv::Mat roiFrame = undistorted(roiRect);
+
+        // ===== 背景减除，获取前景运动区域 (仅处理 ROI) =====
         cv::Mat fgMask;
-        bgSub->apply(undistorted, fgMask);
+        bgSub->apply(roiFrame, fgMask);
         // 对前景掩码进行简单形态学处理，去除噪声
         cv::erode(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 1);
         cv::dilate(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 2);
@@ -192,7 +211,7 @@ void runTrajectorySolverCamera(const Config &cfg)
         bool hasValidBall = false;
         cv::Point2f center2D;
         cv::Mat hsv, mask, morphed;
-        cv::cvtColor(undistorted, hsv, cv::COLOR_BGR2HSV);
+        cv::cvtColor(roiFrame, hsv, cv::COLOR_BGR2HSV);
         cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
 
         // 形态学操作
@@ -261,12 +280,16 @@ void runTrajectorySolverCamera(const Config &cfg)
                    cv::Scalar(255, 255, 255),
                    2);
 
+        // ===== 定义检测 ROI: 根据配置左右各去除一定比例 =====
+        // (ROI 参数已在本循环开始处计算, 此处无需重复定义)
+
         if (detectEnabled && maxIdx >= 0 && maxArea >= MIN_CONTOUR_AREA)
         {
             hasValidBall = true;
             // 计算篮球中心点
             cv::Moments m = cv::moments(contours[maxIdx]);
-            center2D = cv::Point2f(static_cast<float>(m.m10/m.m00), static_cast<float>(m.m01/m.m00));
+            center2D = cv::Point2f(static_cast<float>(m.m10/m.m00) + roiRect.x,
+                                   static_cast<float>(m.m01/m.m00) + roiRect.y);
             
             // 添加新的轨迹点到当前段（带距离检测）
             auto& currentSegment = trajectorySegments.back();
@@ -296,8 +319,17 @@ void runTrajectorySolverCamera(const Config &cfg)
             cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
             // 绘制外接矩形
             cv::Rect bbox = cv::boundingRect(contours[maxIdx]);
+            bbox.x += roiRect.x;
+            bbox.y += roiRect.y;
             cv::rectangle(undistorted, bbox, cv::Scalar(0, 255, 255), 2);
-            cv::drawContours(undistorted, contours, maxIdx, cv::Scalar(0,255,0), 2);
+
+            // 将轮廓坐标平移后绘制
+            std::vector<std::vector<cv::Point>> contoursShifted = contours;
+            for (auto &c : contoursShifted) for (auto &pt : c) {
+                pt.x += roiRect.x;
+                pt.y += roiRect.y;
+            }
+            cv::drawContours(undistorted, contoursShifted, maxIdx, cv::Scalar(0,255,0), 2);
             
             // 显示篮球像素坐标
             cv::putText(undistorted, 
@@ -391,6 +423,20 @@ void runTrajectorySolverCamera(const Config &cfg)
                         color,
                         2);
             }
+        }
+
+        // ===== 在非检测区域覆盖半透明蒙版 =====
+        {
+            cv::Mat overlay = undistorted.clone();
+            // 左右遮罩
+            cv::rectangle(overlay, cv::Rect(0, 0, leftX, frameH), cv::Scalar(0,0,0), -1);
+            cv::rectangle(overlay, cv::Rect(frameW - rightX, 0, rightX, frameH), cv::Scalar(0,0,0), -1);
+            // 上下遮罩
+            cv::rectangle(overlay, cv::Rect(leftX, 0, roiW, topY), cv::Scalar(0,0,0), -1);
+            cv::rectangle(overlay, cv::Rect(leftX, frameH - bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
+
+            double alpha = 0.5;
+            cv::addWeighted(overlay, alpha, undistorted, 1 - alpha, 0, undistorted);
         }
 
         // 显示图像和检查按键
