@@ -1,5 +1,6 @@
 #include "solver.hpp"
 #include "hik_camera.hpp"
+#include "zed_camera.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
@@ -63,15 +64,45 @@ static SafeQueue<WorldPkt> gWorldQueue;
 //================= 实时相机接口 =================//
 void runTrajectorySolverCamera(const Config &cfg)
 {
-    HikCamera camera;
-    if(!camera.openCamera())
-    {
-        std::cerr << "[ERROR] Failed to open HikVision camera" << std::endl;
+    // 根据配置选择相机类型
+    std::unique_ptr<HikCamera> hikCamera;
+    std::unique_ptr<ZEDCamera> zedCamera;
+    
+    bool cameraOpened = false;
+    std::string cameraName;
+    
+    if (cfg.cameraType == CameraType::ZED) {
+        std::cout << "[INFO] 使用ZED相机" << std::endl;
+#ifndef ZED_AVAILABLE
+        std::cerr << "[ERROR] ZED SDK不可用，请重新编译并安装ZED SDK" << std::endl;
         return;
+#else
+        zedCamera = std::make_unique<ZEDCamera>();
+        if (zedCamera->openCamera()) {
+            cameraOpened = true;
+            cameraName = zedCamera->getCameraName();
+        } else {
+            std::cerr << "[ERROR] 无法打开ZED相机" << std::endl;
+            return;
+        }
+#endif
+    } else {
+        std::cout << "[INFO] 使用HIK相机" << std::endl;
+        hikCamera = std::make_unique<HikCamera>();
+        if (hikCamera->openCamera()) {
+            cameraOpened = true;
+            cameraName = "HIK Camera";
+        } else {
+            std::cerr << "[ERROR] 无法打开HIK相机" << std::endl;
+            return;
+        }
     }
+    
+    std::cout << "[INFO] 相机已打开: " << cameraName << std::endl;
 
     // 背景减除器，用于滤除静态背景，只保留运动目标
-    cv::Ptr<cv::BackgroundSubtractor> bgSub = cv::createBackgroundSubtractorMOG2(500, /*varThreshold*/16, /*detectShadows*/true);
+    // 统一参数，不区分相机类型
+    cv::Ptr<cv::BackgroundSubtractor> bgSub = cv::createBackgroundSubtractorMOG2(400, /*varThreshold*/25, /*detectShadows*/false);
 
     cv::Mat frame, undistorted;
     int frameIdx = 0;
@@ -94,13 +125,6 @@ void runTrajectorySolverCamera(const Config &cfg)
     bool detectEnabled = true;  // 默认开启检测
     const string windowName = "Basketball Detection";
     cv::namedWindow(windowName);
-    // 添加新的窗口用于显示处理过程
-    // const string binaryWindowName = "Binary Process"; // 已禁用
-    // cv::namedWindow(binaryWindowName);
-
-    // 新增：运动掩码窗口
-    const string motionWindowName = "Motion Mask";
-    cv::namedWindow(motionWindowName);
 
     // 存储轨迹点和对应的颜色索引
     struct TrajectorySegment {
@@ -155,8 +179,15 @@ void runTrajectorySolverCamera(const Config &cfg)
 
     while (true)
     {
-        if(!camera.getFrame(frame))
-        {
+        // 根据相机类型获取图像
+        bool frameSuccess = false;
+        if (cfg.cameraType == CameraType::ZED) {
+            frameSuccess = zedCamera->getFrame(frame);
+        } else {
+            frameSuccess = hikCamera->getFrame(frame);
+        }
+        
+        if (!frameSuccess) {
             std::cerr << "[WARN] Failed to get camera frame, retrying..." << std::endl;
             continue;
         }
@@ -202,7 +233,7 @@ void runTrajectorySolverCamera(const Config &cfg)
 
         // ===== 背景减除，获取前景运动区域 (仅处理 ROI) =====
         cv::Mat fgMask;
-        bgSub->apply(roiFrame, fgMask);
+        bgSub->apply(roiFrame, fgMask);  // 使用默认学习率
         // 对前景掩码进行简单形态学处理，去除噪声
         cv::erode(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 1);
         cv::dilate(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 2);
@@ -231,8 +262,7 @@ void runTrajectorySolverCamera(const Config &cfg)
         std::vector<int> markerIds;
         std::vector<std::vector<cv::Point2f>> corners;
         cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cfg.arucoDictId);
-        cv::Ptr<cv::aruco::DetectorParameters> detectorParams = cv::aruco::DetectorParameters::create();
-        cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds, detectorParams);
+        cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds);
 
         bool hasValidAruco = false;
         std::vector<cv::Vec3d> rvecs, tvecs;
@@ -301,22 +331,12 @@ void runTrajectorySolverCamera(const Config &cfg)
         morphedViz.copyTo(processViz(cv::Rect(mask.cols, 0, mask.cols, mask.rows)));
 
         // ===== 颜色掩码与运动前景掩码合并 =====
-        cv::Mat movingMask;
-        cv::bitwise_and(morphed, fgMask, movingMask);
-        // 显示运动掩码
-        cv::imshow(motionWindowName, movingMask);
-
-        // 添加标题
-        cv::putText(processViz, "Original Mask", 
-                   cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 
-                   0.8, cv::Scalar(0,255,0), 2);
-        cv::putText(processViz, "After Morphology", 
-                   cv::Point(mask.cols + 10, 30), cv::FONT_HERSHEY_SIMPLEX, 
-                   0.8, cv::Scalar(0,255,0), 2);
-
-        // 轮廓检测（始终进行）
+        cv::Mat movingBallMask;  // 重命名：这是运动中的篮球掩码
+        cv::bitwise_and(morphed, fgMask, movingBallMask);
+        
+        // 轮廓检测（基于运动中的篮球掩码）
         std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(movingMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        cv::findContours(movingBallMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
         double maxArea = 0; 
         int maxIdx = -1;
         
@@ -520,8 +540,6 @@ void runTrajectorySolverCamera(const Config &cfg)
         cv::imshow(windowName, undistorted);
         int key = cv::waitKey(1);
         if (key == 27) {
-            // cv::destroyWindow(binaryWindowName); // 已禁用二值窗口
-            cv::destroyWindow(motionWindowName);
             break;        // ESC: exit program
         }
         if (key == 32) {
@@ -649,7 +667,12 @@ void runTrajectorySolverCamera(const Config &cfg)
         }
     }
 
-    camera.closeCamera();
+    // 根据相机类型关闭相机
+    if (cfg.cameraType == CameraType::ZED && zedCamera) {
+        zedCamera->closeCamera();
+    } else if (hikCamera) {
+        hikCamera->closeCamera();
+    }
 
     if (roiWriter.isOpened()) {
         roiWriter.release();

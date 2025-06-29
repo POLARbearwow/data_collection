@@ -9,10 +9,17 @@ struct Plane {
     cv::Vec3d normal{0.0, 1.0, 0.0};     // 平面法向量 (需归一化)
 };
 
+// 相机类型枚举
+enum class CameraType {
+    HIK,    // 海康相机
+    ZED     // ZED相机
+};
+
 struct Config {
     // 相机参数
     cv::Mat K;              // 内参矩阵 3x3
     cv::Mat distCoeffs;     // 畸变系数
+    CameraType cameraType = CameraType::HIK;  // 相机类型
 
     // ArUco 参数
     int   arucoDictId   = cv::aruco::DICT_4X4_50;

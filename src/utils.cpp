@@ -18,6 +18,17 @@ bool loadConfig(const std::string &filePath, Config &cfg)
     fs["aruco_marker_length"] >> cfg.arucoMarkerLength;
     fs["H_marker"] >> cfg.H_marker;
 
+    // 相机类型（可选，默认为HIK）
+    if (!fs["camera_type"].empty()) {
+        std::string cameraTypeStr;
+        fs["camera_type"] >> cameraTypeStr;
+        if (cameraTypeStr == "zed" || cameraTypeStr == "ZED") {
+            cfg.cameraType = CameraType::ZED;
+        } else {
+            cfg.cameraType = CameraType::HIK; // 默认或其他值都使用HIK
+        }
+    }
+
     // 数据记录相关参数（可选）
     if (!fs["record_enabled"].empty()) {
         int recEnabledInt = 0;

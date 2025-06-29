@@ -1,27 +1,28 @@
 %YAML:1.0
 ---
-# 相机内参 (示例)
+# ZED相机配置 - 使用实际标定参数 (LEFT SENSOR)
+# 相机内参矩阵: [fx, 0, cx; 0, fy, cy; 0, 0, 1]
 camera_matrix: !!opencv-matrix
   rows: 3
   cols: 3
   dt: d
-  data: [  1.8031236189499991e+03, 0., 7.0934715470774881e+02, 0.,
-       1.8026797120136421e+03, 5.4356057701037935e+02, 0., 0., 1. ]
+  data: [ 1.0688700000000000e+03, 0., 9.6469000000000001e+02, 0.,
+       1.0684800000000000e+03, 5.4134900000000000e+02, 0., 0., 1. ]
 
-# 畸变系数
+# 畸变系数 [k1, k2, p1, p2, k3] - 使用ZED LEFT SENSOR实际标定结果
 dist_coeffs: !!opencv-matrix
   rows: 5
   cols: 1
   dt: d
-  data: [-8.0141197441296649e-02, 2.3090296118985287e-01,
-       -1.7706563099783139e-04, 3.3945840846640626e-04,
-       -4.4481086302767137e-01 ]
+  data: [0., 0., 0., 0., 0.]
 
-# 相机类型 (hik 或 zed)
-camera_type: "hik"
+# 相机类型 (zed 或 hik)
+camera_type: "zed"
 
-# ArUco 字典与标签大小
-aruco_dict_id: 0  
+# ArUco 字典与标签大小 - 5x5字典选项
+# DICT_4X4_50 = 0, DICT_4X4_100 = 1, DICT_4X4_250 = 2, DICT_4X4_1000 = 3
+# DICT_5X5_50 = 4, DICT_5X5_100 = 5, DICT_5X5_250 = 6, DICT_5X5_1000 = 7
+aruco_dict_id: 7  # DICT_5X5_1000 为7
 aruco_marker_length: 0.60
 
 # ArUco 中心点到地面高度 (米)
@@ -34,13 +35,10 @@ record_dir: "../records"  # 保存CSV的文件夹
 max_ball_gap: 120    # 若两帧中心距超过该像素值，则视为误检并断开轨迹
 
 # ROI 检测区域 (0~0.5): 左右/上下可单独设置
-roi_left_margin_ratio: 0.05   # 左侧去除10%
-roi_right_margin_ratio: 0.05  # 右侧去除10%
-roi_top_margin_ratio: 0.0   # 上方去除5%
+roi_left_margin_ratio: 0.05   # 左侧去除5%
+roi_right_margin_ratio: 0.05  # 右侧去除5%
+roi_top_margin_ratio: 0.0   # 上方不去除
 roi_bottom_margin_ratio: 0.0 # 底部不去除
-
-# (可选) 若仍使用旧版单边比例，可保留 roi_side_margin_ratio 键
-roi_side_margin_ratio: 0.0
 
 origin_offset: !!opencv-matrix  #aruco到发射机构的偏移
   rows: 1
@@ -48,7 +46,7 @@ origin_offset: !!opencv-matrix  #aruco到发射机构的偏移
   dt: d
   data: [ 0.775, 5.0, -5.37 ]
 
-# HSV 阈值
+# HSV 阈值 (与example_config.yaml保持一致)
 hsv_low: !!opencv-matrix
   rows: 1
   cols: 3
@@ -74,4 +72,4 @@ motion_plane:
     data: [ 0.0, 0.0, 1.0 ]
 
 # ROI 视频保存目录
-roi_video_dir: "../roi_videos"
+roi_video_dir: "../roi_videos" 

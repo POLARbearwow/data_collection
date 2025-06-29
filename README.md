@@ -61,8 +61,9 @@ pip install opencv-python
 
 所有关键参数都集中在 `config/example_config.yaml` 文件中，在运行程序前请务必根据您的实际情况进行配置。
 
+- `camera_type`: 相机类型，可选 `"hik"` (海康相机) 或 `"zed"` (ZED相机)。默认为 `"hik"`。
 - `camera_matrix`: 3x3 相机内参矩阵。
-- `dist_coeffs`: 1x5 相机畸变系数。
+- `dist_coeffs`: 1x5 相机畸变系数。  
 - `aruco_dict_id`: 使用的 ArUco 字典类型枚举值 (例如，`DICT_5X5_1000` 对应 `7`)。
 - `aruco_marker_length`: ArUco 标记的实际物理边长（单位：米）。
 - `H_marker`: ArUco 标记中心点到真实地面的垂直高度（单位：米）。
@@ -73,14 +74,14 @@ pip install opencv-python
 
 ### 1. 运行轨迹解算器 (C++)
 
-`trajectory_solver` 是主程序，支持视频和图像两种模式。
+`trajectory_solver` 是主程序，支持视频、图像和实时相机三种模式。
 
 **命令格式**:
 ```bash
 ./build/trajectory_solver <mode> <input_path> [config_path]
 ```
-- `<mode>`: 模式，可选 `video` 或 `image`。
-- `<input_path>`: 输入的视频或图片文件路径。
+- `<mode>`: 模式，可选 `video` (视频文件)、`image` (单张图片) 或 `camera` (实时相机)。
+- `<input_path>`: 输入的视频或图片文件路径。当使用 `camera` 模式时可省略。
 - `[config_path]`: (可选) 配置文件路径。如果省略，程序会自动在默认位置查找。
 
 **示例 1：分析视频文件**
@@ -91,6 +92,23 @@ pip install opencv-python
 **示例 2：分析单张图片**
 ```bash
 ./build/trajectory_solver image ../pictures/test_frame.jpg
+```
+
+**示例 3：实时相机模式**
+```bash
+# 使用海康相机 (默认)
+./build/trajectory_solver camera ../config/example_config.yaml
+
+# 使用ZED相机 (需要修改配置文件中的camera_type为"zed")
+./build/trajectory_solver camera ../config/zed_config.yaml
+```
+
+**快速演示**：
+使用提供的演示脚本快速体验相机选择功能：
+```bash
+cd scripts
+chmod +x demo_camera_selection.sh
+./demo_camera_selection.sh
 ```
 
 程序运行时会打开一个窗口，实时显示检测结果，包括：
