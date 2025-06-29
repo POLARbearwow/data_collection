@@ -1,5 +1,6 @@
 #include "solver.hpp"
 #include "hik_camera.hpp"
+#include "basketball_detector.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <iostream>
@@ -51,19 +52,6 @@ void runTrajectorySolver(const std::string &videoPath, const Config &cfg)
     {
         ++frameIdx;
         undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
-
-        // ===== 新增: 定义检测 ROI =====
-        const int frameW = undistorted.cols;
-        const int frameH = undistorted.rows;
-        const int leftX   = static_cast<int>(frameW * cfg.roiLeftMarginRatio   + 0.5);
-        const int rightX  = static_cast<int>(frameW * cfg.roiRightMarginRatio  + 0.5);
-        const int topY    = static_cast<int>(frameH * cfg.roiTopMarginRatio    + 0.5);
-        const int bottomY = static_cast<int>(frameH * cfg.roiBottomMarginRatio + 0.5);
-        const int roiW = frameW - leftX - rightX;
-        const int roiH = frameH - topY - bottomY;
-        if (roiW <=0 || roiH <=0) { cerr << "ROI尺寸错误" << endl; break; }
-        const cv::Rect roiRect(leftX, topY, roiW, roiH);
-        cv::Mat roiFrame = undistorted(roiRect);
 
         cout << "[LOG] 处理帧 " << frameIdx << endl;
 
@@ -121,56 +109,25 @@ void runTrajectorySolver(const std::string &videoPath, const Config &cfg)
         if (!arucoValid)
         {
             cout << "[WARN] 本帧未检测到有效 ArUco 标记，跳过后续计算" << endl;
-            {
-                cv::Mat overlay = undistorted.clone();
-                cv::rectangle(overlay, cv::Rect(0,0,leftX, frameH), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(frameW-rightX,0,rightX,frameH), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(leftX,0,roiW, topY), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(leftX, frameH-bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
-                double alpha=0.5; cv::addWeighted(overlay,alpha,undistorted,1-alpha,0,undistorted);
-            }
             imshow("debug", undistorted);
             if (waitKey(1) == 27) break;
             continue;
         }
 
-        // 篮球 HSV 分割 (仅在 ROI 内)
-        Mat hsv, mask;
-        cvtColor(roiFrame, hsv, COLOR_BGR2HSV);
-        inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-        Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
-        morphologyEx(mask, mask, MORPH_OPEN, kernel);
-        morphologyEx(mask, mask, MORPH_CLOSE, kernel);
-
-        // 最大轮廓
-        vector<vector<Point>> contours;
-        findContours(mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-        cout << "[LOG] 共检测到 " << contours.size() << " 个候选轮廓" << endl;
-        double maxArea = 0; int maxIdx = -1;
-        for (size_t i=0;i<contours.size();++i)
+        // 篮球检测
+        BasketballDetector detector;
+        detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+        auto ballResult = detector.detect(undistorted);
+        
+        if (!ballResult.found)
         {
-            double a = contourArea(contours[i]);
-            if (a>maxArea){maxArea=a;maxIdx=i;}
-        }
-        if (maxIdx<0)
-        {
-            cout << "[WARN] 未找到满足面积要求的轮廓，跳过" << endl;
-            {
-                cv::Mat overlay = undistorted.clone();
-                cv::rectangle(overlay, cv::Rect(0,0,leftX, frameH), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(frameW-rightX,0,rightX,frameH), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(leftX,0,roiW, topY), cv::Scalar(0,0,0), -1);
-                cv::rectangle(overlay, cv::Rect(leftX, frameH-bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
-                double alpha=0.5; cv::addWeighted(overlay,alpha,undistorted,1-alpha,0,undistorted);
-            }
+            cout << "[WARN] 未检测到篮球，跳过后续计算" << endl;
             imshow("debug", undistorted);
-            if (waitKey(1)==27) break;
+            if (waitKey(1) == 27) break;
             continue;
         }
 
-        Moments m = moments(contours[maxIdx]);
-        Point2f center2D(static_cast<float>(m.m10/m.m00) + roiRect.x,
-                         static_cast<float>(m.m01/m.m00) + roiRect.y);
+        Point2f center2D = ballResult.center;
         circle(undistorted, center2D, 5, Scalar(0,0,255), -1);
 
         cout << fixed << setprecision(2);
@@ -194,20 +151,6 @@ void runTrajectorySolver(const std::string &videoPath, const Config &cfg)
             putText(undistorted, format("H=%.2f m", height), Point(15,60), FONT_HERSHEY_SIMPLEX,0.8,Scalar(255,0,0),2);
         }
 
-        // 轮廓偏移后再绘制
-        std::vector<std::vector<Point>> contoursShifted = contours;
-        for(auto &c: contoursShifted){ for(auto &pt: c) { pt.x += roiRect.x; pt.y += roiRect.y; } }
-        drawContours(undistorted, contoursShifted, maxIdx, Scalar(0,255,0),2);
-
-        // ====== 显示前覆盖非检测区域蒙版 ======
-        {
-            cv::Mat overlay = undistorted.clone();
-            cv::rectangle(overlay, cv::Rect(0,0,leftX, frameH), cv::Scalar(0,0,0), -1);
-            cv::rectangle(overlay, cv::Rect(frameW-rightX,0,rightX,frameH), cv::Scalar(0,0,0), -1);
-            cv::rectangle(overlay, cv::Rect(leftX,0,roiW, topY), cv::Scalar(0,0,0), -1);
-            cv::rectangle(overlay, cv::Rect(leftX, frameH-bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
-            double alpha=0.5; cv::addWeighted(overlay,alpha,undistorted,1-alpha,0,undistorted);
-        }
         imshow("debug", undistorted);
         if (waitKey(1)==27) break;
     }
@@ -225,19 +168,6 @@ void runTrajectorySolverImage(const std::string &imagePath, const Config &cfg)
 
     cv::Mat undistorted;
     cv::undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
-
-    // ===== 新增: 定义检测 ROI =====
-    const int frameW = undistorted.cols;
-    const int frameH = undistorted.rows;
-    const int leftX   = static_cast<int>(frameW * cfg.roiLeftMarginRatio   + 0.5);
-    const int rightX  = static_cast<int>(frameW * cfg.roiRightMarginRatio  + 0.5);
-    const int topY    = static_cast<int>(frameH * cfg.roiTopMarginRatio    + 0.5);
-    const int bottomY = static_cast<int>(frameH * cfg.roiBottomMarginRatio + 0.5);
-    const int roiW = frameW - leftX - rightX;
-    const int roiH = frameH - topY - bottomY;
-    if (roiW <=0 || roiH <=0) { cerr << "ROI尺寸错误" << endl; return; }
-    const cv::Rect roiRect(leftX, topY, roiW, roiH);
-    cv::Mat roiFrame = undistorted(roiRect);
 
     // 复用视频版本中的主要逻辑，只是不循环
     int dummyFrameIdx = 1;
@@ -286,33 +216,20 @@ void runTrajectorySolverImage(const std::string &imagePath, const Config &cfg)
         return;
     }
 
-    // HSV 分割
-    cv::Mat hsv, mask;
-    cv::cvtColor(roiFrame, hsv, cv::COLOR_BGR2HSV);
-    cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5,5));
-    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    double maxArea = 0; int maxIdx = -1;
-    for (size_t i = 0; i < contours.size(); ++i)
+    // 篮球检测
+    BasketballDetector detector;
+    detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+    auto ballResult = detector.detect(undistorted);
+    
+    if (!ballResult.found)
     {
-        double a = cv::contourArea(contours[i]);
-        if (a > maxArea) { maxArea = a; maxIdx = (int)i; }
-    }
-    if (maxIdx < 0)
-    {
-        std::cout << "[WARN] 未找到满足面积要求的轮廓" << std::endl;
+        std::cout << "[WARN] 未检测到篮球" << std::endl;
         cv::imshow("result", undistorted);
         cv::waitKey(0);
         return;
     }
 
-    cv::Moments m = cv::moments(contours[maxIdx]);
-    cv::Point2f center2D(static_cast<float>(m.m10/m.m00) + roiRect.x,
-                         static_cast<float>(m.m01/m.m00) + roiRect.y);
+    cv::Point2f center2D = ballResult.center;
     cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
 
     std::cout << std::fixed << std::setprecision(2);
@@ -335,20 +252,6 @@ void runTrajectorySolverImage(const std::string &imagePath, const Config &cfg)
         cv::putText(undistorted, cv::format("H=%.2f m", height), cv::Point(15,60), cv::FONT_HERSHEY_SIMPLEX,0.8, cv::Scalar(255,0,0),2);
     }
 
-    // 轮廓偏移后再绘制
-    std::vector<std::vector<cv::Point>> contoursShifted = contours;
-    for(auto &c: contoursShifted){ for(auto &pt: c) { pt.x += roiRect.x; pt.y += roiRect.y; } }
-    cv::drawContours(undistorted, contoursShifted, maxIdx, cv::Scalar(0,255,0), 2);
-
-    // ====== 显示前覆盖非检测区域蒙版 ======
-    {
-        cv::Mat overlay = undistorted.clone();
-        cv::rectangle(overlay, cv::Rect(0,0,leftX, frameH), cv::Scalar(0,0,0), -1);
-        cv::rectangle(overlay, cv::Rect(frameW-rightX,0,rightX,frameH), cv::Scalar(0,0,0), -1);
-        cv::rectangle(overlay, cv::Rect(leftX,0,roiW, topY), cv::Scalar(0,0,0), -1);
-        cv::rectangle(overlay, cv::Rect(leftX, frameH-bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
-        double alpha=0.5; cv::addWeighted(overlay,alpha,undistorted,1-alpha,0,undistorted);
-    }
-    imshow("result", undistorted);
+    cv::imshow("result", undistorted);
     cv::waitKey(0);
 } 

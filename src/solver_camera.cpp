@@ -1,6 +1,6 @@
 #include "solver.hpp"
 #include "hik_camera.hpp"
-#include "zed_camera.hpp"
+#include "basketball_detector.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
@@ -12,10 +12,6 @@
 #include <fstream>
 #include <ctime>
 #include <filesystem>
-#include <opencv2/video.hpp>
-#include <thread>
-#include <atomic>
-#include "safe_queue.hpp"
 
 using namespace cv;
 using namespace std;
@@ -54,55 +50,15 @@ static bool intersectRayPlane(const Vec3d &origin, const Vec3d &dir,
     return true;
 }
 
-// ===== 数据包定义 =====
-struct PixelPkt { uint64_t id; int64_t ts; cv::Point2f ballUV; cv::Point2f arucoUV; };
-struct WorldPkt { uint64_t id; int64_t ts; cv::Vec3d xyz; double height; };
-
-static SafeQueue<PixelPkt> gPixQueue;
-static SafeQueue<WorldPkt> gWorldQueue;
-
 //================= 实时相机接口 =================//
 void runTrajectorySolverCamera(const Config &cfg)
 {
-    // 根据配置选择相机类型
-    std::unique_ptr<HikCamera> hikCamera;
-    std::unique_ptr<ZEDCamera> zedCamera;
-    
-    bool cameraOpened = false;
-    std::string cameraName;
-    
-    if (cfg.cameraType == CameraType::ZED) {
-        std::cout << "[INFO] 使用ZED相机" << std::endl;
-#ifndef ZED_AVAILABLE
-        std::cerr << "[ERROR] ZED SDK不可用，请重新编译并安装ZED SDK" << std::endl;
+    HikCamera camera;
+    if(!camera.openCamera())
+    {
+        std::cerr << "[ERROR] Failed to open HikVision camera" << std::endl;
         return;
-#else
-        zedCamera = std::make_unique<ZEDCamera>();
-        if (zedCamera->openCamera()) {
-            cameraOpened = true;
-            cameraName = zedCamera->getCameraName();
-        } else {
-            std::cerr << "[ERROR] 无法打开ZED相机" << std::endl;
-            return;
-        }
-#endif
-    } else {
-        std::cout << "[INFO] 使用HIK相机" << std::endl;
-        hikCamera = std::make_unique<HikCamera>();
-        if (hikCamera->openCamera()) {
-            cameraOpened = true;
-            cameraName = "HIK Camera";
-        } else {
-            std::cerr << "[ERROR] 无法打开HIK相机" << std::endl;
-            return;
-        }
     }
-    
-    std::cout << "[INFO] 相机已打开: " << cameraName << std::endl;
-
-    // 背景减除器，用于滤除静态背景，只保留运动目标
-    // 统一参数，不区分相机类型
-    cv::Ptr<cv::BackgroundSubtractor> bgSub = cv::createBackgroundSubtractorMOG2(400, /*varThreshold*/25, /*detectShadows*/false);
 
     cv::Mat frame, undistorted;
     int frameIdx = 0;
@@ -111,10 +67,6 @@ void runTrajectorySolverCamera(const Config &cfg)
     std::ofstream recordFile;
     bool recording = false;
     int  sessionIndex = 0;  // 用于文件命名
-
-    // ROI 视频录制相关
-    bool roiRec = false;
-    cv::VideoWriter roiWriter;
 
     // 用于控制日志输出频率
     auto lastLogTime = steady_clock::now();
@@ -125,6 +77,9 @@ void runTrajectorySolverCamera(const Config &cfg)
     bool detectEnabled = true;  // 默认开启检测
     const string windowName = "Basketball Detection";
     cv::namedWindow(windowName);
+    // 添加新的窗口用于显示处理过程
+    const string binaryWindowName = "Binary Process";
+    cv::namedWindow(binaryWindowName);
 
     // 存储轨迹点和对应的颜色索引
     struct TrajectorySegment {
@@ -145,49 +100,10 @@ void runTrajectorySolverCamera(const Config &cfg)
     // 创建一个用于显示处理过程的图像
     cv::Mat processViz;
 
-    // === 多线程写 CSV ===
-    std::atomic<bool> stopFlag{false};
-
-    // CSV 文件  —— pixels 带时间戳命名
-    std::shared_ptr<std::ofstream> pixelCsvPtr; // 按检测会话创建
-    std::mutex pixelCsvMtx;
-    std::ofstream worldCsv(cfg.recordDir + "/world_coords.csv");
-    worldCsv << "frame_id,timestamp_ms,X,Y,Z,H\n";
-
-    // pixel 写线程
-    std::thread pixWriter([&]{
-        PixelPkt pkt;
-        while(!stopFlag){
-            if(gPixQueue.pop(pkt)){
-                std::lock_guard<std::mutex> lock(pixelCsvMtx);
-                if (pixelCsvPtr) {
-                    (*pixelCsvPtr) << pkt.id << "," << pkt.ts << "," << pkt.ballUV.x << "," << pkt.ballUV.y << "," << pkt.arucoUV.x << "," << pkt.arucoUV.y << "\n";
-                }
-            }
-        }
-    });
-
-    // world 写线程
-    std::thread worldWriter([&]{
-        WorldPkt wp;
-        while(!stopFlag){
-            if(gWorldQueue.pop(wp)){
-                worldCsv << wp.id << "," << wp.ts << "," << wp.xyz[0] << "," << wp.xyz[1] << "," << wp.xyz[2] << "," << wp.height << "\n";
-            }
-        }
-    });
-
     while (true)
     {
-        // 根据相机类型获取图像
-        bool frameSuccess = false;
-        if (cfg.cameraType == CameraType::ZED) {
-            frameSuccess = zedCamera->getFrame(frame);
-        } else {
-            frameSuccess = hikCamera->getFrame(frame);
-        }
-        
-        if (!frameSuccess) {
+        if(!camera.getFrame(frame))
+        {
             std::cerr << "[WARN] Failed to get camera frame, retrying..." << std::endl;
             continue;
         }
@@ -204,42 +120,8 @@ void runTrajectorySolverCamera(const Config &cfg)
 
         cv::undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
 
-        // 本帧时间戳(ms)
-        int64_t frameTs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now().time_since_epoch()).count();
-
-        // after frameTs declaration
-        cv::Point2f arucoUV(-999.f,-999.f);
-        cv::Point2f ballUV(-999.f,-999.f);
-
-        // ===== ROI 计算：根据配置左右边缘比例 =====
-        const int frameW = undistorted.cols;
-        const int frameH = undistorted.rows;
-        const int leftX   = static_cast<int>(frameW * cfg.roiLeftMarginRatio   + 0.5);
-        const int rightX  = static_cast<int>(frameW * cfg.roiRightMarginRatio  + 0.5);
-        const int topY    = static_cast<int>(frameH * cfg.roiTopMarginRatio    + 0.5);
-        const int bottomY = static_cast<int>(frameH * cfg.roiBottomMarginRatio + 0.5);
-
-        const int roiW = frameW - leftX - rightX;
-        const int roiH = frameH - topY - bottomY;
-
-        if (roiW <= 0 || roiH <= 0) {
-            std::cerr << "[ERROR] ROI 尺寸为非正值，请检查 margin 配置" << std::endl;
-            break;
-        }
-
-        const cv::Rect roiRect(leftX, topY, roiW, roiH);
-        cv::Mat roiFrame = undistorted(roiRect);
-
-        // ===== 背景减除，获取前景运动区域 (仅处理 ROI) =====
-        cv::Mat fgMask;
-        bgSub->apply(roiFrame, fgMask);  // 使用默认学习率
-        // 对前景掩码进行简单形态学处理，去除噪声
-        cv::erode(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 1);
-        cv::dilate(fgMask, fgMask, morphKernel, cv::Point(-1,-1), 2);
-
         // 显示检测状态
-        string statusText = detectEnabled ? "Detection: ON [Space]" : "Detection: OFF [Space]";
+        string statusText = detectEnabled ? "Detection: ON [Space to toggle]" : "Detection: OFF [Space to toggle]";
         cv::putText(undistorted, statusText, 
                    cv::Point(15, undistorted.rows - 90),
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, 
@@ -251,18 +133,12 @@ void runTrajectorySolverCamera(const Config &cfg)
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, 
                    cv::Scalar(255, 255, 255), 2);
 
-        // 显示 ROI 录制状态
-        string recText = roiRec ? "ROI Rec: ON [V]" : "ROI Rec: OFF [V]";
-        cv::putText(undistorted, recText,
-                   cv::Point(15, undistorted.rows - 60),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                   roiRec ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 2);
-
         // 持续进行ArUco检测
         std::vector<int> markerIds;
         std::vector<std::vector<cv::Point2f>> corners;
         cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cfg.arucoDictId);
-        cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds);
+        cv::Ptr<cv::aruco::DetectorParameters> detectorParams = cv::aruco::DetectorParameters::create();
+        cv::aruco::detectMarkers(undistorted, dictionary, corners, markerIds, detectorParams);
 
         bool hasValidAruco = false;
         std::vector<cv::Vec3d> rvecs, tvecs;
@@ -298,127 +174,76 @@ void runTrajectorySolverCamera(const Config &cfg)
             }
         }
 
-        // ------ 每帧写入像素数据（ArUco 优先） ------
-        if(hasValidAruco){
-            cv::Point2f sum(0,0);
-            for(const auto &pt: corners[0]) sum += pt;
-            arucoUV = sum * 0.25f;
-        }
-
         // 篮球检测
         bool hasValidBall = false;
         cv::Point2f center2D;
-        cv::Mat hsv, mask, morphed;
-        cv::cvtColor(roiFrame, hsv, cv::COLOR_BGR2HSV);
-        cv::inRange(hsv, cfg.hsvLow, cfg.hsvHigh, mask);
-
-        // 形态学操作
-        cv::erode(mask, morphed, morphKernel, cv::Point(-1,-1), 2);
-        cv::dilate(morphed, morphed, morphKernel, cv::Point(-1,-1), 2);
-
+        
+        BasketballDetector detector;
+        detector.setHSVRange(cfg.hsvLow, cfg.hsvHigh);
+        auto ballResult = detector.detect(undistorted);
+        
         // 创建可视化图像
-        const int vizWidth = mask.cols * 2;
-        const int vizHeight = mask.rows;
+        const int vizWidth = ballResult.mask.cols * 2;
+        const int vizHeight = ballResult.mask.rows;
         processViz = cv::Mat::zeros(vizHeight, vizWidth, CV_8UC3);
 
         // 转换掩码为彩色图像以便显示
         cv::Mat maskViz, morphedViz;
-        cv::cvtColor(mask, maskViz, cv::COLOR_GRAY2BGR);
-        cv::cvtColor(morphed, morphedViz, cv::COLOR_GRAY2BGR);
-
-        // 在可视化图像中并排显示原始掩码和处理后的图像
-        maskViz.copyTo(processViz(cv::Rect(0, 0, mask.cols, mask.rows)));
-        morphedViz.copyTo(processViz(cv::Rect(mask.cols, 0, mask.cols, mask.rows)));
-
-        // ===== 颜色掩码与运动前景掩码合并 =====
-        cv::Mat movingBallMask;  // 重命名：这是运动中的篮球掩码
-        cv::bitwise_and(morphed, fgMask, movingBallMask);
+        cv::cvtColor(ballResult.mask, maskViz, cv::COLOR_GRAY2BGR);
         
-        // 轮廓检测（基于运动中的篮球掩码）
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(movingBallMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-        double maxArea = 0; 
-        int maxIdx = -1;
-        
-        // 计算最大面积的轮廓
-        for (size_t i = 0; i < contours.size(); ++i)
-        {
-            double area = cv::contourArea(contours[i]);
-            if (area > maxArea) {
-                maxArea = area;
-                maxIdx = (int)i;
+        // 如果检测到篮球，显示检测结果
+        if (ballResult.found) {
+            cv::cvtColor(ballResult.mask, morphedViz, cv::COLOR_GRAY2BGR);
+            // 在掩码上绘制检测结果
+            for (const auto &p : ballResult.inliers) {
+                cv::circle(morphedViz, p, 2, cv::Scalar(255,0,255), -1);
             }
+            cv::circle(morphedViz, ballResult.center, (int)ballResult.radius, cv::Scalar(0,255,0), 2);
+        } else {
+            cv::cvtColor(ballResult.mask, morphedViz, cv::COLOR_GRAY2BGR);
         }
 
-        currentMaxArea = maxArea;  // 更新当前最大面积
+        // 在可视化图像中并排显示原始掩码和处理后的图像
+        maskViz.copyTo(processViz(cv::Rect(0, 0, ballResult.mask.cols, ballResult.mask.rows)));
+        morphedViz.copyTo(processViz(cv::Rect(ballResult.mask.cols, 0, ballResult.mask.cols, ballResult.mask.rows)));
 
-        // 显示当前最大轮廓面积
-        cv::putText(undistorted, 
-                   cv::format("Max Contour Area: %.1f", currentMaxArea),
-                   cv::Point(15, undistorted.rows - 150),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                   currentMaxArea >= MIN_CONTOUR_AREA ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255),
-                   2);
+        // 添加标题
+        cv::putText(processViz, "Original Mask", 
+                   cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 
+                   0.8, cv::Scalar(0,255,0), 2);
+        cv::putText(processViz, "Detection Result", 
+                   cv::Point(ballResult.mask.cols + 10, 30), cv::FONT_HERSHEY_SIMPLEX, 
+                   0.8, cv::Scalar(0,255,0), 2);
 
-        // 显示面积阈值
-        cv::putText(undistorted,
-                   cv::format("Area Threshold: %.1f", MIN_CONTOUR_AREA),
-                   cv::Point(15, undistorted.rows - 180),
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                   cv::Scalar(255, 255, 255),
-                   2);
+        // 显示处理过程
+        cv::imshow(binaryWindowName, processViz);
 
-        // ===== 定义检测 ROI: 根据配置左右各去除一定比例 =====
-        // (ROI 参数已在本循环开始处计算, 此处无需重复定义)
-
-        if (detectEnabled && maxIdx >= 0 && maxArea >= MIN_CONTOUR_AREA)
+        if (detectEnabled && ballResult.found)
         {
             hasValidBall = true;
-            // 计算篮球中心点
-            cv::Moments m = cv::moments(contours[maxIdx]);
-            center2D = cv::Point2f(static_cast<float>(m.m10/m.m00) + roiRect.x,
-                                   static_cast<float>(m.m01/m.m00) + roiRect.y);
-            ballUV = center2D;
+            center2D = ballResult.center;
             
-            // 添加新的轨迹点到当前段（带距离检测）
+            // 添加新的轨迹点到当前段
             auto& currentSegment = trajectorySegments.back();
-            bool startNewSegment = false;
-            if (!currentSegment.points.empty()) {
-                double distGap = cv::norm(center2D - currentSegment.points.back());
-                if (distGap > cfg.maxBallGap) {
-                    startNewSegment = true;
-                }
+            currentSegment.points.push_back(center2D);
+            if (currentSegment.points.size() > maxTrajectoryPoints) {
+                currentSegment.points.pop_front();
             }
 
-            if (startNewSegment) {
-                // 仅切分轨迹，不改变颜色
-                trajectorySegments.push_back({std::deque<cv::Point2f>(), currentSegment.colorIndex});
-                if (shouldLog) {
-                    std::cout << "[INFO] Large ball gap " << cfg.maxBallGap << "px exceeded. Start new segment (same color)." << std::endl;
+            // 绘制所有轨迹段
+            for (const auto& segment : trajectorySegments) {
+                const cv::Scalar& color = TRAJECTORY_COLORS[segment.colorIndex];
+                for (size_t i = 1; i < segment.points.size(); ++i) {
+                    cv::line(undistorted, 
+                            segment.points[i-1], 
+                            segment.points[i], 
+                            color, 
+                            2);
                 }
-            }
-
-            auto& segToAdd = trajectorySegments.back();
-            segToAdd.points.push_back(center2D);
-            if (segToAdd.points.size() > maxTrajectoryPoints) {
-                segToAdd.points.pop_front();
             }
 
             // 绘制当前篮球位置
             cv::circle(undistorted, center2D, 5, cv::Scalar(0,0,255), -1);
-            // 绘制外接矩形
-            cv::Rect bbox = cv::boundingRect(contours[maxIdx]);
-            bbox.x += roiRect.x;
-            bbox.y += roiRect.y;
-            cv::rectangle(undistorted, bbox, cv::Scalar(0, 255, 255), 2);
-
-            // 将轮廓坐标平移后绘制
-            std::vector<std::vector<cv::Point>> contoursShifted = contours;
-            for (auto &c : contoursShifted) for (auto &pt : c) {
-                pt.x += roiRect.x;
-                pt.y += roiRect.y;
-            }
-            cv::drawContours(undistorted, contoursShifted, maxIdx, cv::Scalar(0,255,0), 2);
             
             // 显示篮球像素坐标
             cv::putText(undistorted, 
@@ -479,15 +304,12 @@ void runTrajectorySolverCamera(const Config &cfg)
                     // 计算新坐标系下的坐标 (减去偏移量)
                     cv::Vec3d newPos = intersection - cfg.originOffset;
 
-                    recordFile << frameIdx << "," << now_ts << ","
+                    recordFile << now_ts << ","
                                << intersection[0] << "," << intersection[1] << "," << intersection[2] << ","
                                << newPos[0]       << "," << newPos[1]       << "," << newPos[2] << ","
                                << height << ","
                                << cfg.launchRPM << std::endl;
                 }
-
-                // 推送 world 数据包供写线程
-                gWorldQueue.push(WorldPkt{static_cast<uint64_t>(frameIdx), frameTs, intersection, height});
             }
         }
         else
@@ -505,70 +327,15 @@ void runTrajectorySolverCamera(const Config &cfg)
                       cv::Scalar(0,0,255), 2);
         }
 
-        // ---- 始终绘制所有轨迹段，以便丢失目标后仍显示历史轨迹 ----
-        for (const auto& segment : trajectorySegments) {
-            const cv::Scalar& color = TRAJECTORY_COLORS[segment.colorIndex];
-            for (size_t i = 1; i < segment.points.size(); ++i) {
-                cv::line(undistorted,
-                        segment.points[i-1],
-                        segment.points[i],
-                        color,
-                        2);
-            }
-        }
-
-        // ===== 在非检测区域覆盖半透明蒙版 =====
-        {
-            cv::Mat overlay = undistorted.clone();
-            // 左右遮罩
-            cv::rectangle(overlay, cv::Rect(0, 0, leftX, frameH), cv::Scalar(0,0,0), -1);
-            cv::rectangle(overlay, cv::Rect(frameW - rightX, 0, rightX, frameH), cv::Scalar(0,0,0), -1);
-            // 上下遮罩
-            cv::rectangle(overlay, cv::Rect(leftX, 0, roiW, topY), cv::Scalar(0,0,0), -1);
-            cv::rectangle(overlay, cv::Rect(leftX, frameH - bottomY, roiW, bottomY), cv::Scalar(0,0,0), -1);
-
-            double alpha = 0.5;
-            cv::addWeighted(overlay, alpha, undistorted, 1 - alpha, 0, undistorted);
-        }
-
-        // ---- ROI 视频录制 ----
-        if (roiRec && roiWriter.isOpened()) {
-            roiWriter.write(frame); // 录制摄像头原始画面
-        }
-
         // 显示图像和检查按键
         cv::imshow(windowName, undistorted);
         int key = cv::waitKey(1);
         if (key == 27) {
+            cv::destroyWindow(binaryWindowName);
             break;        // ESC: exit program
         }
         if (key == 32) {
             detectEnabled = !detectEnabled;  // Space: toggle detection only
-
-            // ---- pixels.csv 会话管理 ----
-            {
-                std::lock_guard<std::mutex> lock(pixelCsvMtx);
-                if (detectEnabled) {
-                    // 开启新 pixels.csv
-                    if (pixelCsvPtr && pixelCsvPtr->is_open()) pixelCsvPtr->close();
-                    char fnameP[128];
-                    std::time_t tP = std::time(nullptr);
-                    std::tm *tmPtrP = std::localtime(&tP);
-                    std::strftime(fnameP, sizeof(fnameP), "pixels_%Y%m%d_%H%M%S.csv", tmPtrP);
-                    std::string ppath = cfg.recordDir + "/" + fnameP;
-                    pixelCsvPtr = std::make_shared<std::ofstream>(ppath);
-                    if (pixelCsvPtr->is_open()) {
-                        (*pixelCsvPtr) << "frame_id,timestamp_ms,ball_u,ball_v,aruco_u,aruco_v\n";
-                        std::cout << "[INFO] Start pixels csv: " << ppath << std::endl;
-                    }
-                } else {
-                    if (pixelCsvPtr && pixelCsvPtr->is_open()) {
-                        pixelCsvPtr->close();
-                        std::cout << "[INFO] pixels csv closed." << std::endl;
-                    }
-                    pixelCsvPtr.reset();
-                }
-            }
 
             // 切换检测状态时，处理记录文件开关
             if (cfg.recordEnabled)
@@ -595,7 +362,7 @@ void runTrajectorySolverCamera(const Config &cfg)
                         recording = true;
                         std::cout << "[INFO] Start recording to " << filepath << std::endl;
                         // 写入表头
-                        recordFile << "frame_id,timestamp_ms,x,y,z,new_x,new_y,new_z,height_m,rpm" << std::endl;
+                        recordFile << "timestamp_ms,x,y,z,new_x,new_y,new_z,height_m,rpm" << std::endl;
                     } else {
                         std::cerr << "[ERROR] Failed to open record file: " << filepath << std::endl;
                     }
@@ -622,74 +389,12 @@ void runTrajectorySolverCamera(const Config &cfg)
                 std::cout << "[INFO] Trajectory cleared" << std::endl;
             }
         }
-        if (key == 'v' || key == 'V') {
-            roiRec = !roiRec;
-            if (roiRec) {
-                // 开启录制
-                char fname[128];
-                std::time_t t = std::time(nullptr);
-                std::tm *tm_ptr = std::localtime(&t);
-                std::strftime(fname, sizeof(fname), "roi_%Y%m%d_%H%M%S.avi", tm_ptr);
-                std::string filepath = cfg.roiVideoDir + "/" + fname;
-                // 确保目录存在
-                namespace fs = std::filesystem;
-                try { fs::create_directories(cfg.roiVideoDir); } catch (...) {}
-                int fourcc = cv::VideoWriter::fourcc('F','F','V','1');
-                double fps = 30; // 0 让容器决定; 若需固定可设置实际摄像头帧率
-                roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
-                if (!roiWriter.isOpened()) {
-                    // 尝试 MJPG + 质量 100 作为退备
-                    fourcc = cv::VideoWriter::fourcc('M','J','P','G');
-                    fps = 30.0;
-                    roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
-                    if (roiWriter.isOpened()) {
-                        roiWriter.set(cv::VIDEOWRITER_PROP_QUALITY, 100);
-                    }
-                }
-                if (!roiWriter.isOpened()) {
-                    std::cerr << "[ERROR] 无法打开 ROI 视频文件 " << filepath << std::endl;
-                    roiRec = false;
-                } else {
-                    std::cout << "[INFO] 开始 ROI 录制: " << filepath << std::endl;
-                }
-            } else {
-                // 关闭录制
-                if (roiWriter.isOpened()) {
-                    roiWriter.release();
-                    std::cout << "[INFO] 停止 ROI 录制" << std::endl;
-                }
-            }
-        }
-
-        // ---- push PixelPkt at end of frame ----
-        if(detectEnabled){
-            gPixQueue.push(PixelPkt{static_cast<uint64_t>(frameIdx), frameTs, ballUV, arucoUV});
-        }
     }
 
-    // 根据相机类型关闭相机
-    if (cfg.cameraType == CameraType::ZED && zedCamera) {
-        zedCamera->closeCamera();
-    } else if (hikCamera) {
-        hikCamera->closeCamera();
-    }
-
-    if (roiWriter.isOpened()) {
-        roiWriter.release();
-        std::cout << "[INFO] ROI 录制文件已关闭" << std::endl;
-    }
+    camera.closeCamera();
 
     if (recordFile.is_open()) {
         std::cout << "[INFO] Stop recording, file closed." << std::endl;
         recordFile.close();
     }
-
-    // 通知写线程退出
-    stopFlag = true;
-    gPixQueue.push(PixelPkt{});   // 唤醒
-    gWorldQueue.push(WorldPkt{});
-    pixWriter.join();
-    worldWriter.join();
-    pixelCsvPtr.reset();
-    worldCsv.close();
 } 
