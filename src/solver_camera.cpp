@@ -12,6 +12,9 @@
 #include <ctime>
 #include <filesystem>
 #include <opencv2/video.hpp>
+#include <thread>
+#include <atomic>
+#include "safe_queue.hpp"
 
 using namespace cv;
 using namespace std;
@@ -49,6 +52,13 @@ static bool intersectRayPlane(const Vec3d &origin, const Vec3d &dir,
     intersection = origin + t * dir;
     return true;
 }
+
+// ===== 数据包定义 =====
+struct PixelPkt { uint64_t id; int64_t ts; cv::Point2f ballUV; cv::Point2f arucoUV; };
+struct WorldPkt { uint64_t id; int64_t ts; cv::Vec3d xyz; double height; };
+
+static SafeQueue<PixelPkt> gPixQueue;
+static SafeQueue<WorldPkt> gWorldQueue;
 
 //================= 实时相机接口 =================//
 void runTrajectorySolverCamera(const Config &cfg)
@@ -111,6 +121,38 @@ void runTrajectorySolverCamera(const Config &cfg)
     // 创建一个用于显示处理过程的图像
     cv::Mat processViz;
 
+    // === 多线程写 CSV ===
+    std::atomic<bool> stopFlag{false};
+
+    // CSV 文件  —— pixels 带时间戳命名
+    std::shared_ptr<std::ofstream> pixelCsvPtr; // 按检测会话创建
+    std::mutex pixelCsvMtx;
+    std::ofstream worldCsv(cfg.recordDir + "/world_coords.csv");
+    worldCsv << "frame_id,timestamp_ms,X,Y,Z,H\n";
+
+    // pixel 写线程
+    std::thread pixWriter([&]{
+        PixelPkt pkt;
+        while(!stopFlag){
+            if(gPixQueue.pop(pkt)){
+                std::lock_guard<std::mutex> lock(pixelCsvMtx);
+                if (pixelCsvPtr) {
+                    (*pixelCsvPtr) << pkt.id << "," << pkt.ts << "," << pkt.ballUV.x << "," << pkt.ballUV.y << "," << pkt.arucoUV.x << "," << pkt.arucoUV.y << "\n";
+                }
+            }
+        }
+    });
+
+    // world 写线程
+    std::thread worldWriter([&]{
+        WorldPkt wp;
+        while(!stopFlag){
+            if(gWorldQueue.pop(wp)){
+                worldCsv << wp.id << "," << wp.ts << "," << wp.xyz[0] << "," << wp.xyz[1] << "," << wp.xyz[2] << "," << wp.height << "\n";
+            }
+        }
+    });
+
     while (true)
     {
         if(!camera.getFrame(frame))
@@ -130,6 +172,14 @@ void runTrajectorySolverCamera(const Config &cfg)
         }
 
         cv::undistort(frame, undistorted, cfg.K, cfg.distCoeffs);
+
+        // 本帧时间戳(ms)
+        int64_t frameTs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+
+        // after frameTs declaration
+        cv::Point2f arucoUV(-999.f,-999.f);
+        cv::Point2f ballUV(-999.f,-999.f);
 
         // ===== ROI 计算：根据配置左右边缘比例 =====
         const int frameW = undistorted.cols;
@@ -218,6 +268,13 @@ void runTrajectorySolverCamera(const Config &cfg)
             }
         }
 
+        // ------ 每帧写入像素数据（ArUco 优先） ------
+        if(hasValidAruco){
+            cv::Point2f sum(0,0);
+            for(const auto &pt: corners[0]) sum += pt;
+            arucoUV = sum * 0.25f;
+        }
+
         // 篮球检测
         bool hasValidBall = false;
         cv::Point2f center2D;
@@ -301,6 +358,7 @@ void runTrajectorySolverCamera(const Config &cfg)
             cv::Moments m = cv::moments(contours[maxIdx]);
             center2D = cv::Point2f(static_cast<float>(m.m10/m.m00) + roiRect.x,
                                    static_cast<float>(m.m01/m.m00) + roiRect.y);
+            ballUV = center2D;
             
             // 添加新的轨迹点到当前段（带距离检测）
             auto& currentSegment = trajectorySegments.back();
@@ -401,12 +459,15 @@ void runTrajectorySolverCamera(const Config &cfg)
                     // 计算新坐标系下的坐标 (减去偏移量)
                     cv::Vec3d newPos = intersection - cfg.originOffset;
 
-                    recordFile << now_ts << ","
+                    recordFile << frameIdx << "," << now_ts << ","
                                << intersection[0] << "," << intersection[1] << "," << intersection[2] << ","
                                << newPos[0]       << "," << newPos[1]       << "," << newPos[2] << ","
                                << height << ","
                                << cfg.launchRPM << std::endl;
                 }
+
+                // 推送 world 数据包供写线程
+                gWorldQueue.push(WorldPkt{static_cast<uint64_t>(frameIdx), frameTs, intersection, height});
             }
         }
         else
@@ -466,6 +527,31 @@ void runTrajectorySolverCamera(const Config &cfg)
         if (key == 32) {
             detectEnabled = !detectEnabled;  // Space: toggle detection only
 
+            // ---- pixels.csv 会话管理 ----
+            {
+                std::lock_guard<std::mutex> lock(pixelCsvMtx);
+                if (detectEnabled) {
+                    // 开启新 pixels.csv
+                    if (pixelCsvPtr && pixelCsvPtr->is_open()) pixelCsvPtr->close();
+                    char fnameP[128];
+                    std::time_t tP = std::time(nullptr);
+                    std::tm *tmPtrP = std::localtime(&tP);
+                    std::strftime(fnameP, sizeof(fnameP), "pixels_%Y%m%d_%H%M%S.csv", tmPtrP);
+                    std::string ppath = cfg.recordDir + "/" + fnameP;
+                    pixelCsvPtr = std::make_shared<std::ofstream>(ppath);
+                    if (pixelCsvPtr->is_open()) {
+                        (*pixelCsvPtr) << "frame_id,timestamp_ms,ball_u,ball_v,aruco_u,aruco_v\n";
+                        std::cout << "[INFO] Start pixels csv: " << ppath << std::endl;
+                    }
+                } else {
+                    if (pixelCsvPtr && pixelCsvPtr->is_open()) {
+                        pixelCsvPtr->close();
+                        std::cout << "[INFO] pixels csv closed." << std::endl;
+                    }
+                    pixelCsvPtr.reset();
+                }
+            }
+
             // 切换检测状态时，处理记录文件开关
             if (cfg.recordEnabled)
             {
@@ -491,7 +577,7 @@ void runTrajectorySolverCamera(const Config &cfg)
                         recording = true;
                         std::cout << "[INFO] Start recording to " << filepath << std::endl;
                         // 写入表头
-                        recordFile << "timestamp_ms,x,y,z,new_x,new_y,new_z,height_m,rpm" << std::endl;
+                        recordFile << "frame_id,timestamp_ms,x,y,z,new_x,new_y,new_z,height_m,rpm" << std::endl;
                     } else {
                         std::cerr << "[ERROR] Failed to open record file: " << filepath << std::endl;
                     }
@@ -531,12 +617,12 @@ void runTrajectorySolverCamera(const Config &cfg)
                 namespace fs = std::filesystem;
                 try { fs::create_directories(cfg.roiVideoDir); } catch (...) {}
                 int fourcc = cv::VideoWriter::fourcc('F','F','V','1');
-                double fps = 0; // 0 让容器决定; 若需固定可设置实际摄像头帧率
+                double fps = 30; // 0 让容器决定; 若需固定可设置实际摄像头帧率
                 roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
                 if (!roiWriter.isOpened()) {
                     // 尝试 MJPG + 质量 100 作为退备
                     fourcc = cv::VideoWriter::fourcc('M','J','P','G');
-                    fps = 200.0;
+                    fps = 30.0;
                     roiWriter.open(filepath, fourcc, fps, cv::Size(frame.cols, frame.rows));
                     if (roiWriter.isOpened()) {
                         roiWriter.set(cv::VIDEOWRITER_PROP_QUALITY, 100);
@@ -556,6 +642,11 @@ void runTrajectorySolverCamera(const Config &cfg)
                 }
             }
         }
+
+        // ---- push PixelPkt at end of frame ----
+        if(detectEnabled){
+            gPixQueue.push(PixelPkt{static_cast<uint64_t>(frameIdx), frameTs, ballUV, arucoUV});
+        }
     }
 
     camera.closeCamera();
@@ -569,4 +660,13 @@ void runTrajectorySolverCamera(const Config &cfg)
         std::cout << "[INFO] Stop recording, file closed." << std::endl;
         recordFile.close();
     }
+
+    // 通知写线程退出
+    stopFlag = true;
+    gPixQueue.push(PixelPkt{});   // 唤醒
+    gWorldQueue.push(WorldPkt{});
+    pixWriter.join();
+    worldWriter.join();
+    pixelCsvPtr.reset();
+    worldCsv.close();
 } 
