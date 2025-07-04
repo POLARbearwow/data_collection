@@ -9,29 +9,39 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 查找 OpenCV
 find_package(OpenCV REQUIRED core calib3d imgproc highgui video aruco)
-
-# 如果未找到 OpenCV，则给出提示
-if(NOT OpenCV_FOUND)
-    message(FATAL_ERROR "OpenCV not found. Please install OpenCV and set OpenCV_DIR.")
-endif()
+# 查找 Kinect SDK
+find_package(k4a REQUIRED)
 
 # 公共源文件 (通用配置加载等)
 set(COMMON_SRC src/utils.cpp)
 
-# 新增: 海康相机源码
-set(HIK_CAMERA_SRC src/hik_camera.cpp)
+# 相机适配器源码
+set(CAMERA_ADAPTER_SRC 
+    src/hik_camera_adapter.cpp 
+    src/kinect_camera_adapter.cpp 
+    src/camera_factory.cpp
+)
 
 # 头文件目录
 include_directories(${CMAKE_SOURCE_DIR}/include)
-# 新增: 海康 SDK 头文件路径
+# 海康 SDK 头文件路径
 include_directories(/opt/MVS/include)
+# Kinect SDK 头文件路径 (如果安装了)
+if(TARGET k4a::k4a)
+    message(STATUS "Found Azure Kinect SDK via k4a::k4a target.")
+endif()
 
 # 主轨迹求解器
-add_executable(trajectory_solver src/main.cpp src/solver.cpp src/solver_camera.cpp ${COMMON_SRC} ${HIK_CAMERA_SRC})
+add_executable(trajectory_solver src/main.cpp src/solver.cpp src/solver_camera.cpp ${COMMON_SRC} ${CAMERA_ADAPTER_SRC})
 
 # 篮球检测调试器
 add_executable(basketball_detect src/basketball_detect.cpp ${COMMON_SRC})
 
-# 链接 OpenCV 和海康相机 SDK
-target_link_libraries(trajectory_solver PRIVATE ${OpenCV_LIBS} /opt/MVS/lib/64/libMvCameraControl.so)
+# 相机测试程序
+add_executable(test_camera src/test_camera.cpp ${COMMON_SRC} ${CAMERA_ADAPTER_SRC})
+
+# 链接
+# 海康相机SDK和OpenCV
+target_link_libraries(trajectory_solver PRIVATE ${OpenCV_LIBS} /opt/MVS/lib/64/libMvCameraControl.so k4a::k4a)
+target_link_libraries(test_camera PRIVATE ${OpenCV_LIBS} /opt/MVS/lib/64/libMvCameraControl.so k4a::k4a)
 target_link_libraries(basketball_detect PRIVATE ${OpenCV_LIBS}) 

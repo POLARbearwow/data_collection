@@ -12,6 +12,20 @@ bool loadConfig(const std::string &filePath, Config &cfg)
         return false;
     }
 
+    // 读取相机类型配置
+    std::string cameraTypeStr;
+    if (!fs["camera_type"].empty()) {
+        fs["camera_type"] >> cameraTypeStr;
+        if (cameraTypeStr == "kinect" || cameraTypeStr == "KINECT") {
+            cfg.cameraType = CameraType::KINECT;
+        } else if (cameraTypeStr == "hik" || cameraTypeStr == "HIK") {
+            cfg.cameraType = CameraType::HIK;
+        } else {
+            std::cerr << "警告: 未知的相机类型 '" << cameraTypeStr << "', 使用默认值 HIK" << std::endl;
+            cfg.cameraType = CameraType::HIK;
+        }
+    }
+
     fs["camera_matrix"] >> cfg.K;
     fs["dist_coeffs"] >> cfg.distCoeffs;
     fs["aruco_dict_id"] >> cfg.arucoDictId;
