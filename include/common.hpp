@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
 #include <string>
+#include "camera_interface.hpp"
 
 struct Plane {
     cv::Vec3d point{0.0, 0.0, 0.0};      // 平面上一点 (世界坐标系)
@@ -10,6 +11,9 @@ struct Plane {
 };
 
 struct Config {
+    // 相机类型选择
+    CameraType cameraType = CameraType::HIK;  // 默认使用海康相机
+    
     // 相机参数
     cv::Mat K;              // 内参矩阵 3x3
     cv::Mat distCoeffs;     // 畸变系数

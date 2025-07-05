@@ -1,5 +1,5 @@
 #include "solver.hpp"
-#include "hik_camera.hpp"
+#include "camera_interface.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
@@ -63,12 +63,20 @@ static SafeQueue<WorldPkt> gWorldQueue;
 //================= 实时相机接口 =================//
 void runTrajectorySolverCamera(const Config &cfg)
 {
-    HikCamera camera;
-    if(!camera.openCamera())
-    {
-        std::cerr << "[ERROR] Failed to open HikVision camera" << std::endl;
+    // 根据配置创建相机实例
+    auto camera = CameraFactory::createCamera(cfg.cameraType);
+    if (!camera) {
+        std::cerr << "[ERROR] Failed to create camera instance" << std::endl;
         return;
     }
+    
+    if(!camera->openCamera())
+    {
+        std::cerr << "[ERROR] Failed to open camera" << std::endl;
+        return;
+    }
+    
+    std::cout << "[INFO] Camera info: " << camera->getCameraInfo() << std::endl;
 
     // 背景减除器，用于滤除静态背景，只保留运动目标
     cv::Ptr<cv::BackgroundSubtractor> bgSub = cv::createBackgroundSubtractorMOG2(500, /*varThreshold*/16, /*detectShadows*/true);
@@ -155,7 +163,7 @@ void runTrajectorySolverCamera(const Config &cfg)
 
     while (true)
     {
-        if(!camera.getFrame(frame))
+        if(!camera->getFrame(frame))
         {
             std::cerr << "[WARN] Failed to get camera frame, retrying..." << std::endl;
             continue;
@@ -649,7 +657,7 @@ void runTrajectorySolverCamera(const Config &cfg)
         }
     }
 
-    camera.closeCamera();
+    camera->closeCamera();
 
     if (roiWriter.isOpened()) {
         roiWriter.release();
